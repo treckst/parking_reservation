@@ -17,3 +17,12 @@ wheels/
 # Local runtime and test artifacts
 .pytest_cache/
 .runtime/
+
+# Local developer tooling and generated planning state
+.codex/
+.planning/milestone.lock
+.planning/research/.cache/
+.planning/state.json
+
+# Generated booking database and SQLite journal files
+ingested_mock_data/*.sqlite3*
