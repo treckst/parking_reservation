@@ -47,7 +47,7 @@ def test_dense_weight_controls_conflicting_ranks():
 
 
 def test_unicode_tokenization():
-    assert tokenize("GODZINY, ładowanie!") == ["godziny", "ładowanie"]
+    assert tokenize("PARKING, José!") == ["parking", "josé"]
 
 
 def test_unapproved_metadata_is_excluded():

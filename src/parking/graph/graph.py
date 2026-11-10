@@ -19,6 +19,9 @@ def build_graph(model_factory=create_llm, retriever=retrieve, *, checkpointer=No
     nodes = PolicyNodes(model_factory, retriever)
     workflow = StateGraph(MainState, input_schema=GraphInput, output_schema=GraphOutput)
     workflow.add_node("prepare", nodes.prepare)
+    workflow.add_node("check_language", nodes.check_language)
+    workflow.add_node("reject_language", nodes.reject_language)
+    workflow.add_node("guard_input", nodes.guard_input)
     workflow.add_node("classify", nodes.classify)
     workflow.add_node("fallback", nodes.fallback)
     workflow.add_node("publish", nodes.publish)
@@ -47,22 +50,16 @@ def build_graph(model_factory=create_llm, retriever=retrieve, *, checkpointer=No
             text = "The administrator approved your reservation."
         else:
             text = "The administrator rejected your reservation."
-        if state["guard_language"] == "pl":
-            text = {
-                "Please provide the spot, date, times with timezone offsets, name, surname and vehicle plate.":
-                    "Podaj miejsce, dat?, godziny ze stref? czasow?, imi?, nazwisko i numer rejestracyjny.",
-                "This spot cannot be reserved for that interval. Please check the spot and times.":
-                    "Nie mo?na zarezerwowa? miejsca w podanym terminie. Sprawd? miejsce i godziny.",
-                "The administrator approved your reservation.": "Administrator zatwierdzi? rezerwacj?.",
-                "The administrator rejected your reservation.": "Administrator odrzuci? rezerwacj?.",
-            }[text]
         return {"final_reply": text, "messages": [AIMessage(content=text, id=f"assistant:{state['request_id']}")]}
 
     workflow.add_node("mock_node", mock_node)
     workflow.add_node("reject", reject)
     workflow.add_node("booking_reply", booking_reply)
     workflow.add_edge(START, "prepare")
-    workflow.add_conditional_edges("prepare", lambda s: "fallback" if s["blocked"] else "classify")
+    workflow.add_edge("prepare", "check_language")
+    workflow.add_conditional_edges("check_language", lambda s: "guard_input" if s["is_english"] else "reject_language")
+    workflow.add_edge("reject_language", END)
+    workflow.add_conditional_edges("guard_input", lambda s: "fallback" if s["blocked"] else "classify")
     workflow.add_conditional_edges("classify", lambda s: {
         "policy": "policy", "reservation": "reservation", "unsupported": "fallback",
     }[s["intent"]["kind"]])

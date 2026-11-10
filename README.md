@@ -6,6 +6,13 @@ subgraphs preserve conversation state. Reservations hold a slot as pending befor
 an API-driven approval interrupt; only approval reaches the mock continuation.
 See [the admin approval API](docs/admin-approval.md) for request/resume details.
 
+Customer chat is English-only. The `check_language` node uses a strict structured
+LLM decision before safety checks, intent classification, retrieval or reservation
+execution. Non-English, mixed-language and unclear requests receive a fixed English
+request to rephrase. Booking identifiers, names, dates and times are allowed in
+English requests and details-only follow-ups. All replies and review summaries
+use English; rejected turns preserve earlier evidence and booking drafts.
+
 ## Setup
 
 Use the project's Python 3.12 environment, uv, and Docker Compose. Copy the

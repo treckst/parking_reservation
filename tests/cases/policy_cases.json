@@ -1,6 +1,6 @@
 [
   {"id":"hours_en","question":"What are CTR opening hours in November 2026?","language":"en","source":"facility_ctr","page":1,"expected_terms":["06:00","22:00"],"mode":"supported"},
-  {"id":"hours_pl","question":"Jakie są godziny otwarcia RIV w listopadzie 2026?","language":"pl","source":"facility_riv","page":1,"expected_terms":["06:00","22:00"],"mode":"supported"},
+  {"id":"hours_riv","question":"What are RIV opening hours in November 2026?","language":"en","source":"facility_riv","page":1,"expected_terms":["06:00","22:00"],"mode":"supported"},
   {"id":"station","question":"How do I reach the station from STA?","language":"en","source":"facility_sta","page":1,"expected_terms":["six","footpath"],"mode":"supported"},
   {"id":"airport","question":"Does AIR have a terminal shuttle?","language":"en","source":"facility_air","page":1,"expected_terms":["No terminal shuttle"],"mode":"supported"},
   {"id":"comparison","question":"Compare opening hours at all four facilities in November 2026.","language":"en","sources":["facility_ctr","facility_riv","facility_sta","facility_air"],"page":1,"expected_terms":["06:00","22:00"],"mode":"comparison"},

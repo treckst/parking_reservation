@@ -40,7 +40,7 @@ class GraphOutput(StrictModel):
 
 class Intent(StrictModel):
     kind: Literal["policy", "reservation", "unsupported"]
-    language: Literal["en", "pl"]
+    language: Literal["en"]
     facilities: list[Literal["CTR", "RIV", "STA", "AIR"]]
     retrieval_question: str = Field(min_length=1, max_length=4000)
 
@@ -85,9 +85,12 @@ class RewrittenQuery(StrictModel):
     preserves_meaning: bool
 
 
+class LanguageDecision(StrictModel):
+    is_english: bool
+
+
 class InputGuardDecision(StrictModel):
     allowed: bool
-    language: Literal["en", "pl"]
 
 
 class AnswerClaim(StrictModel):
@@ -118,7 +121,7 @@ class MainState(TypedDict, total=False):
     final_reply: str
     reservation_state: dict
     blocked: bool
-    guard_language: str
+    is_english: bool
     rewritten_question: str | None
     booking_draft: dict
     reservation_id: str | None

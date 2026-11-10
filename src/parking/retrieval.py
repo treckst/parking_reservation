@@ -58,7 +58,7 @@ def retrieve(question: str, facilities: list[str]) -> list[dict]:
 
 
 def tokenize(text):
-    """Unicode words retain Polish letters; punctuation/case do not split matches."""
+    """Retain Unicode words and names; normalize punctuation and case for matching."""
     return re.findall(r"\w+", text.casefold())
 
 

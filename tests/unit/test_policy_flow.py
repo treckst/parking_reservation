@@ -8,7 +8,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from parking.graph.graph import build_graph
 from parking.graph.schemas import (
-    Answer, EvidenceAssessment, FinalGuardDecision, InputGuardDecision, Intent, RewrittenQuery,
+    Answer, EvidenceAssessment, FinalGuardDecision, InputGuardDecision, Intent, LanguageDecision, RewrittenQuery,
 )
 from parking.retrieval import SOURCES
 
@@ -19,8 +19,9 @@ DOCUMENT = {"id": f"{SOURCE}:page:0", "source": SOURCE, "page": 0,
 
 
 class Model:
-    def __init__(self, *, insufficient=0, allowed=True, final=True, rewrite=True):
+    def __init__(self, *, insufficient=0, allowed=True, final=True, rewrite=True, english=True):
         self.calls = Counter()
+        self.english = english
         self.insufficient, self.allowed, self.final, self.rewrite = insufficient, allowed, final, rewrite
 
     def with_structured_output(self, schema, **kwargs):
@@ -30,12 +31,15 @@ class Model:
             async def ainvoke(self, messages):
                 model.calls[schema.__name__] += 1
                 data = json.loads(messages[-1].content)
+                if schema is LanguageDecision:
+                    assert kwargs == {"method": "json_schema", "strict": True}
+                    return {"is_english": model.english}
                 if schema is InputGuardDecision:
-                    return {"allowed": model.allowed, "language": "en"}
+                    return {"allowed": model.allowed}
                 if schema is FinalGuardDecision:
                     return {"allowed": model.final}
                 if schema is Intent:
-                    return {"kind": "policy", "language": "pl" if "godziny" in data["message"] else "en",
+                    return {"kind": "policy", "language": "en",
                         "facilities": ["CTR"], "retrieval_question": data["message"]}
                 if schema is EvidenceAssessment:
                     if model.calls[schema.__name__] <= model.insufficient:
@@ -44,7 +48,7 @@ class Model:
                 if schema is RewrittenQuery:
                     return {"question": "Opening hours", "preserves_meaning": model.rewrite}
                 if schema is Answer:
-                    text = "Otwarte 06:00–22:00." if data["intent"]["language"] == "pl" else "Open 06:00–22:00."
+                    text = "Open 06:00–22:00."
                     return {"claims": [{"text": text, "evidence_ids": [DOCUMENT["id"]]}], "unavailable": []}
                 raise AssertionError(schema)
 
@@ -57,9 +61,9 @@ async def test_supported_two_turns_keep_evidence_and_draft():
     graph = build_graph(lambda: model, lambda q, f: [DOCUMENT], checkpointer=InMemorySaver())
     config = {"configurable": {"thread_id": "test"}}
     first = await graph.ainvoke({"message": "Hours?", "request_id": "request_00000001"}, config)
-    second = await graph.ainvoke({"message": "Jakie godziny?", "request_id": "request_00000002"}, config)
+    second = await graph.ainvoke({"message": "And the opening hours?", "request_id": "request_00000002"}, config)
     assert "[Booking policy, p. 1]" in first["final_reply"]
-    assert "Otwarte" in second["final_reply"]
+    assert "Open" in second["final_reply"]
     state = (await graph.aget_state(config)).values
     assert set(state["evidence"]) == {"1:1", "2:1"}
     assert len(state["messages"]) == 4

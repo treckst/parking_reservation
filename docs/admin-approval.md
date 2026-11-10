@@ -4,12 +4,18 @@ The main LangGraph mounts three compiled subgraphs: `policy`, `reservation`, and
 `admin`. The administrator surface is API-only in the existing trusted local demo.
 
 ```text
-prepare → classify → policy
-                   → reservation [extract → summarize → persist_pending]
-                     → admin [await_review interrupt → structured LLM review]
-                       → approve → mock_node → customer reply
-                       → reject  → reject    → customer reply
+prepare → check_language → guard_input → classify
+          │                              ├─ policy
+          │                              └─ reservation [extract → summarize → persist_pending]
+          │                                 → admin [await_review interrupt → structured LLM review]
+          │                                   ├─ approve → mock_node → customer reply
+          │                                   └─ reject  → reject    → customer reply
+          └─ non-English → English rephrase request → END
 ```
+
+Only English customer requests pass `check_language`. Its structured LLM decision
+routes non-English or unclear input to a fixed English reply and ends the turn
+before classification or booking writes. Reservation summaries use English.
 
 The customer asks to book through `POST /api/chat`. A complete request needs the
 spot ID, same-day start/end ISO timestamps with offsets, name, surname and vehicle
