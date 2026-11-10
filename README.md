@@ -1,6 +1,6 @@
 # Parking Reservation Assistant
 
-Local policy and reservation chat using LangChain, LangGraph, the Agent Server SDK,
+Local parking reservation and information chat using LangChain, LangGraph, the Agent Server SDK,
 FastAPI, Chroma, and separate SQLite files. Compiled policy, reservation and admin
 subgraphs preserve conversation state. The customer agent uses a bound-tool loop
 to inspect/update its draft and ask for missing fields across turns. It collects details,
@@ -8,6 +8,13 @@ saves a pending SQLite reservation, then passes its ID and summary to the compil
 admin subgraph. After API review, its LLM decision runs through a ToolNode that
 sets the same record to approved or rejected. The parent replies from admin_result.
 See [the admin approval API](docs/admin-approval.md) for request/resume details.
+
+The assistant offers reservation help and parking information. Greetings and
+general questions such as "can you help?" use a conversational route, with no
+document retrieval or booking write. Help with an incomplete draft asks only for
+missing details. Questions about locations, hours, prices, access and rules use
+grounded retrieval; unknown facts remain unavailable without restricting the
+customer to policy questions.
 
 Customer chat is English-only. The `check_language` node uses a strict structured
 LLM decision before safety checks, intent classification, retrieval or reservation

@@ -25,6 +25,7 @@ def build_graph(model_factory=create_llm, retriever=retrieve, *, checkpointer=No
     workflow.add_node("guard_input", nodes.guard_input)
     workflow.add_node("classify", nodes.classify)
     workflow.add_node("fallback", nodes.fallback)
+    workflow.add_node("conversation", nodes.conversation)
     workflow.add_node("publish", nodes.publish)
     policy_graph = build_policy_graph(model_factory, retriever)
     reservation_graph = build_reservation_graph(model_factory, store)
@@ -57,9 +58,10 @@ def build_graph(model_factory=create_llm, retriever=retrieve, *, checkpointer=No
     workflow.add_edge("reject_language", END)
     workflow.add_conditional_edges("guard_input", lambda s: "fallback" if s["blocked"] else "classify")
     workflow.add_conditional_edges("classify", lambda s: {
-        "policy": "policy", "reservation": "reservation", "unsupported": "fallback",
+        "policy": "policy", "reservation": "reservation", "conversation": "conversation", "unsupported": "fallback",
     }[s["intent"]["kind"]])
     workflow.add_edge("fallback", "publish")
+    workflow.add_edge("conversation", "publish")
     workflow.add_edge("publish", END)
     workflow.add_edge("policy", END)
     workflow.add_conditional_edges("reservation", lambda s: "admin" if s.get("reservation_id") else "booking_reply")

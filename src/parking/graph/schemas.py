@@ -41,7 +41,7 @@ class GraphOutput(StrictModel):
 
 
 class Intent(StrictModel):
-    kind: Literal["policy", "reservation", "unsupported"]
+    kind: Literal["policy", "reservation", "conversation", "unsupported"]
     language: Literal["en"]
     facilities: list[Literal["CTR", "RIV", "STA", "AIR"]]
     retrieval_question: str = Field(min_length=1, max_length=4000)

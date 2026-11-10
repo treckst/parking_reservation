@@ -10,16 +10,16 @@
 <body>
   <main>
     <header><div><p class="eyebrow">LOCAL PARKING DEMO</p><h1>Parking assistant</h1></div><button id="new-chat" type="button">New chat</button></header>
-    <p>Ask in English about parking policies at City Centre, Riverside, Station or Airport.</p>
+    <p>Reserve parking or ask about City Centre, Riverside, Station or Airport. Please write in English.</p>
     <section id="messages" aria-label="Conversation" aria-live="polite"></section>
     <p id="error" role="status"></p>
     <button id="retry" type="button" hidden>Retry</button>
     <form id="composer">
-      <label for="message">Your question</label>
-      <textarea id="message" name="message" maxlength="4000" rows="3" placeholder="What is the cancellation policy?"></textarea>
+      <label for="message">Your message</label>
+      <textarea id="message" name="message" maxlength="4000" rows="3" placeholder="I'd like to reserve parking at Airport on November 13, 2026, from 2pm to 9pm."></textarea>
       <button id="send" type="submit" disabled>Send</button>
     </form>
-    <footer>Policy information only. Booking requests and live availability are coming later.</footer>
+    <footer>Reservation requests need a spot ID, visit times, your name and vehicle plate. Administrator approval is required.</footer>
   </main>
 </body>
 </html>
