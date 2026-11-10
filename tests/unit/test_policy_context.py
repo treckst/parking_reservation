@@ -37,3 +37,22 @@ async def test_ambiguous_facility_scope_uses_all_four():
     nodes.ask = classify
     update = await nodes.classify({"message": "Hours?", "request_id": "request_00000001"})
     assert update["intent"]["facilities"] == ["CTR", "RIV", "STA", "AIR"]
+
+
+async def test_classifier_receives_old_context_and_saved_draft():
+    nodes = PolicyNodes(None, None)
+    history = [AIMessage(content="Please provide your vehicle plate.")]
+    history += [HumanMessage(content=f"Earlier turn {i}") for i in range(20)]
+    history += [HumanMessage(content="ABC123")]
+
+    async def classify(schema, instructions, data):
+        assert len(data["safe_history"]) == 21
+        assert data["safe_history"][0]["role"] == "ai"
+        assert data["booking_draft"] == {"name": "Saved"}
+        assert "proposed visit is possible" in instructions
+        return Intent(kind="reservation", language="en", facilities=["AIR"], retrieval_question="Book AIR")
+
+    nodes.ask = classify
+    update = await nodes.classify({"message": "ABC123", "request_id": "request_00000002",
+        "messages": history, "booking_draft": {"name": "Saved"}})
+    assert update["intent"]["kind"] == "reservation"

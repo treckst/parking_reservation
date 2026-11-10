@@ -3,7 +3,7 @@
 import json
 from typing import Annotated
 
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.graph import END
 from langgraph.prebuilt import InjectedState, ToolNode
@@ -15,8 +15,8 @@ from parking.graph.schemas import ReservationDraft
 # Customer-supplied NOT NULL values in seed_database.py. slot_date is derived
 # from start; reservation_id/status/creation metadata are application-owned.
 FIELD_LABELS = {
-    "spot_id": "spot ID", "start": "start date and time with timezone offset",
-    "end": "end date and time with timezone offset", "name": "first name",
+    "spot_id": "spot ID", "start": "start date and time",
+    "end": "end date and time", "name": "first name",
     "surname": "surname", "car_number": "vehicle plate",
 }
 
@@ -89,9 +89,12 @@ class ReservationCollector:
 
     def prepare(self, state):
         data = {"message": state["message"], "current_state": draft_snapshot(state.get("booking_draft", {})),
-                "customer_history": [m.content for m in state.get("messages", [])[-16:] if m.type == "human"]}
+                "conversation": [{"role": m.type, "text": m.content}
+                                 for m in state.get("messages", [])]}
         return {"collection_steps": 0, "collection_action": "continue", "booking_error": "not_submitted",
-                "reservation_messages": [HumanMessage(content=json.dumps(data))]}
+                "reservation_messages": [HumanMessage(content=json.dumps(data)), AIMessage(
+                    content="", tool_calls=[{"name": "inspect_reservation_draft", "args": {},
+                        "id": f"inspect:{state['request_id']}", "type": "tool_call"}])]}
 
     async def agent(self, state):
         model = self.model_factory().bind_tools(self.tools, parallel_tool_calls=False)

@@ -78,15 +78,21 @@ class PolicyNodes:
         return {"blocked": not decision.allowed}
 
     async def classify(self, state):
-        history = [{"role": m.type, "text": m.content} for m in state.get("messages", [])[-8:-1]]
+        history = [{"role": m.type, "text": m.content} for m in state.get("messages", [])[:-1]]
         intent = await self.ask(
             Intent,
             "Classify policy requests, reservation requests and contextual follow-ups. "
-            "Use reservation for a request to book or supply missing booking details; "
-            "live availability and cancellations are unsupported. Resolve facility only from explicit "
+            "Use reservation for a request to book, supply or correct booking details, or ask whether "
+            "a proposed visit is possible (including facility, customer name and a natural-language "
+            "interval). Details-only answers to an assistant's missing-information question belong "
+            "to reservation. Use the saved draft and conversation to resolve follow-ups. A proposed "
+            "reservation must collect missing information, never fall back to policy retrieval merely "
+            "because the user did not say 'book'. Standalone live availability and cancellations are "
+            "unsupported. Policy questions remain policy even with an active draft. Resolve facility only from explicit "
             "current text or unambiguous conversation context. Otherwise use all CTR/RIV/STA/AIR. "
             "Create a standalone retrieval question preserving original meaning and constraints.",
-            {"message": state["message"], "safe_history": history},
+            {"message": state["message"], "safe_history": history,
+             "booking_draft": state.get("booking_draft", {})},
         )
         facilities = intent.facilities or ["CTR", "RIV", "STA", "AIR"]
         intent.facilities = list(dict.fromkeys(facilities))

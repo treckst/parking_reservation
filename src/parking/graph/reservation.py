@@ -49,7 +49,7 @@ def build_reservation_graph(model_factory, store):
     workflow.add_node("summarize", summarize)
     workflow.add_node("persist_pending", persist)
     workflow.add_edge(START, "prepare_collection")
-    workflow.add_edge("prepare_collection", "collect")
+    workflow.add_edge("prepare_collection", "collection_tools")
     workflow.add_conditional_edges("collect", collector.after_agent)
     workflow.add_conditional_edges("collection_tools", collector.after_tools)
     workflow.add_conditional_edges("persist_pending", lambda s: "summarize" if s.get("reservation_id") else END)

@@ -96,7 +96,8 @@ async def test_tools_cannot_update_admin_or_thread_state(store):
         ("ask_missing_reservation_details", {}),
     ])
     result, state = await run_collection(store, model)
-    assert model.tool_results[0].status == "error"
+    assert model.tool_results[0].name == "inspect_reservation_draft"
+    assert model.tool_results[1].status == "error"
     assert state["admin_result"] is None
     assert not state["booking_draft"].get("name")
     assert not store.pending() and "__interrupt__" not in result
@@ -115,3 +116,26 @@ async def test_read_loop_is_bounded_without_a_booking(store):
     result, state = await run_collection(store, model)
     assert not model.steps and not store.pending()
     assert "Please provide" in result["final_reply"]
+
+
+async def test_initial_inspection_is_mandatory_even_when_model_skips_it(store):
+    model = ScriptedModel([("ask_missing_reservation_details", {})])
+    result, state = await run_collection(store, model)
+    assert model.tool_results[0].name == "inspect_reservation_draft"
+    assert json.loads(model.tool_results[0].content)["missing_fields"]
+    assert "vehicle plate" in result["final_reply"]
+    assert not store.pending()
+
+
+async def test_collector_receives_all_role_labelled_history():
+    from langchain_core.messages import HumanMessage
+    from parking.graph.collection import ReservationCollector
+
+    history = [HumanMessage(content="AIR"), AIMessage(content="Which spot and plate?")]
+    history += [HumanMessage(content=f"follow-up {i}") for i in range(20)]
+    update = ReservationCollector(None).prepare({"message": "Tomorrow 2pm to 9pm",
+        "request_id": "collection_00001", "messages": history, "booking_draft": {"name": "Saved"}})
+    data = json.loads(update["reservation_messages"][0].content)
+    assert len(data["conversation"]) == len(history)
+    assert data["conversation"][1] == {"role": "ai", "text": "Which spot and plate?"}
+    assert data["current_state"]["draft"]["name"] == "Saved"
