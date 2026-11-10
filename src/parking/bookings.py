@@ -89,7 +89,7 @@ class BookingStore:
     def find_slots(self, facility, *, slot_date=None, start=None, end=None,
                    duration_hours=None, spot_id=None, limit=3):
         """Return only public, facility-scoped candidates; times enable availability checks."""
-        facility = facility.upper()
+        facility = facility.upper() if isinstance(facility, str) else ""
         if facility not in ("CTR", "RIV", "STA", "AIR"):
             raise ValueError("Choose a parking location")
         if not 1 <= limit <= 12:
@@ -97,6 +97,12 @@ class BookingStore:
         if slot_date is not None:
             slot_date = date.fromisoformat(slot_date).isoformat()
         interval = bool(start and end)
+        if not interval and (start or end):
+            partial = ReservationDraft(start=start, end=end)
+            given_date = (partial.start or partial.end)[:10]
+            if slot_date and slot_date != given_date:
+                raise ValueError("Date does not match interval")
+            slot_date = given_date
         if interval:
             times = ReservationDraft(start=start, end=end)
             start, end = (datetime.fromisoformat(value) for value in (times.start, times.end))

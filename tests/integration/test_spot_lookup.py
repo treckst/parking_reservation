@@ -44,6 +44,9 @@ def test_date_filter_does_not_include_later_days_and_no_date_deduplicates(slot_s
     rows = slot_store.find_slots("AIR", limit=12)
     assert len(rows) == 5 and all(row["slot_date"] is None for row in rows)
     assert not slot_store.find_slots("CTR", spot_id="AIR-001")
+    partial = slot_store.find_slots("AIR", start="2026-11-20T16:00:00+01:00")
+    assert partial and all(row["slot_date"] == "2026-11-20" for row in partial)
+    assert not any(row["availability_checked"] for row in partial)
 
 
 @pytest.mark.parametrize("facility", ["", "%", "CTR%' OR 1=1 --", "CITY", "AIR_%"])

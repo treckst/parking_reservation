@@ -34,8 +34,26 @@ A separate `ReservationDates` structured-output step normalizes natural-language
 dates before collection, using the current Europe/Warsaw time for relative dates
 and the correct seasonal offset. Customers can write "November 13, 2026 from 2pm
 to 9pm". Unspecified fields survive corrections; ambiguous dates require a
-follow-up. Draft tools cannot overwrite normalized dates. Missing spot IDs,
-names or plates also trigger a question; a facility code alone is not a spot ID.
+follow-up. Draft tools cannot overwrite normalized dates. Search preferences retain
+the date and duration even when a phrase such as "six hours in the evening" needs
+an exact start time. A start-only answer then completes the interval using that duration.
+
+Before collecting personal details, reservation, availability and parking-price
+requests query SQLite for up to three matching spaces and their PLN hourly and
+whole-stay costs. The location is always bound as a prefix (`CTR-%`, `AIR-%`, etc.)
+using SQLite case-insensitive LIKE, with `slot_date = ?` whenever a date is known.
+A date-only query offers candidates and rates, explicitly requiring exact times
+before availability is known. Complete intervals check operating hours and
+exclude overlaps with legacy bookings and pending/approved holds; the seed's
+`current_availability` snapshot is not a live interval guarantee.
+
+Customers choose an offered space (including "the first one") rather than needing
+to know an internal ID. Only then does the assistant ask for missing names/plates.
+Changing location clears an incompatible selected space and refreshes the scoped
+options. SQL evidence uses the same immutable per-query reducer as retrieved pages;
+customer identity columns never enter search results. Quotes do not hold a space,
+and reservation writes still revalidate transactionally. Information-only queries
+cannot submit even a complete saved draft.
 
 ## Setup
 

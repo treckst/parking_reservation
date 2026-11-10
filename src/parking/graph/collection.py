@@ -6,7 +6,6 @@ from typing import Annotated
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import InjectedToolCallId, tool
-from langgraph.graph import END
 from langgraph.prebuilt import InjectedState, ToolNode
 from langgraph.types import Command
 
@@ -45,7 +44,7 @@ def public_details(draft, facilities=()):
 
 
 class ReservationCollector:
-    def __init__(self, model_factory):
+    def __init__(self, model_factory, store=None):
         self.model_factory = model_factory
 
         def result(state, tool_call_id, name, *, updates=None, action="continue"):
@@ -55,12 +54,34 @@ class ReservationCollector:
                 # DateNormalizer is the sole owner of time changes. A tool cannot
                 # overwrite a normalized time or fill an ambiguous date by guessing.
                 draft.update(updates.model_dump(exclude_unset=True, exclude={"start", "end"}))
+            options = state.get("parking_options", [])
+            search = dict(state.get("parking_search", {}))
+            if store and updates is not None and updates.spot_id:
+                from parking.graph.discovery import search_filters
+                filters = search_filters({**state, "booking_draft": draft}, spot_id=updates.spot_id.upper())
+                if filters["facility"]:
+                    selected = store.find_slots(**filters)
+                else:
+                    selected = []
+                if not selected:
+                    return Command(update={"reservation_messages": [ToolMessage(
+                        content=json.dumps({"error": "That space does not match this location, date or interval. Choose a listed space."}),
+                        name=name, tool_call_id=tool_call_id, status="error")]})
+                draft["spot_id"] = selected[0]["spot_id"]
+                options = selected
+                search = {key: filters[key] for key in ("facility", "slot_date", "duration_hours")}
             snapshot = draft_snapshot(draft)
+            snapshot.update(parking_search=search, parking_options=options)
             if action == "submit" and not snapshot["ready"]:
                 action = "continue"
+            if action == "submit" and (state.get("intent", {}).get("lookup_only") or
+                                       state.get("intent", {}).get("explain_spot_id")):
+                action = "ask"
             error = ("missing_details" if not snapshot["ready"] else "not_submitted")
             return Command(update={
-                "booking_draft": draft, "reservation_state": public_details(draft, state.get("intent", {}).get("facilities", [])),
+                "booking_draft": draft, "parking_options": options, "parking_search": search,
+                "reservation_state": public_details(draft, [search["facility"]]
+                    if search.get("facility") else state.get("intent", {}).get("facilities", [])),
                 "collection_action": action, "booking_error": None if action == "submit" else error,
                 "reservation_messages": [ToolMessage(
                     content=json.dumps(snapshot), name=name, tool_call_id=tool_call_id)],
@@ -69,7 +90,8 @@ class ReservationCollector:
         @tool
         def inspect_reservation_draft(state: Annotated[dict, InjectedState]) -> str:
             """See this customer's current draft, required missing fields and readiness. No database access."""
-            return json.dumps(draft_snapshot(state.get("booking_draft", {})))
+            return json.dumps({**draft_snapshot(state.get("booking_draft", {})),
+                "parking_search": state.get("parking_search", {}), "parking_options": state.get("parking_options", [])})
 
         @tool
         def update_reservation_draft(updates: ReservationDraft,
@@ -96,6 +118,7 @@ class ReservationCollector:
 
     def prepare(self, state):
         data = {"message": state["message"], "current_state": draft_snapshot(state.get("booking_draft", {})),
+                "parking_search": state.get("parking_search", {}), "parking_options": state.get("parking_options", []),
                 "conversation": [{"role": m.type, "text": m.content}
                                  for m in state.get("messages", [])]}
         return {"collection_steps": 0, "collection_action": "continue", "booking_error": "not_submitted",
@@ -114,8 +137,15 @@ class ReservationCollector:
             "customer fields from the SQLite reservation schema are spot_id, name, surname, car_number, "
             "start and end (already normalized by a separate date extraction step). Do not update "
             "start/end with tools; ask for natural-language dates when missing, never require ISO "
-            "format or an offset from the customer. A facility code alone is not a spot ID; ask "
-            "for the spot rather than inventing one. slot_date "
+            "format or an offset from the customer. parking_options contains real space labels and "
+            "PLN prices from a scoped database lookup. Help the customer choose a listed space; "
+            "never demand an unexplained internal spot ID or invent a space. Save a space only "
+            "when the customer selects it (including 'first one' or 'cheapest'). If the customer "
+            "asks what a spot ID means, explain that it is a space label and keep the saved date "
+            "and duration. Ask only for missing start time when the date/duration are known; "
+            "do not invent an hour for 'evening'. Collect personal details after time and space "
+            "selection. Do not submit a booking for an availability/pricing or explanation-only "
+            "question. slot_date "
             "is derived from start; the application owns ID, creation metadata and pending status. "
             "Call ask_missing_reservation_details when information is missing to ask the customer "
             "and end this turn. When complete, call submit_reservation_draft. This requests a pending "
@@ -129,12 +159,12 @@ class ReservationCollector:
         return {"reservation_messages": [response], "collection_steps": state["collection_steps"] + 1}
 
     def after_agent(self, state):
-        return "collection_tools" if state["reservation_messages"][-1].tool_calls else END
+        return "collection_tools" if state["reservation_messages"][-1].tool_calls else "record_discovery"
 
     def after_tools(self, state):
         if state["collection_action"] == "submit":
             # Recompute rather than trusting a model-generated readiness claim.
-            return "persist_pending" if draft_snapshot(state.get("booking_draft", {}))["ready"] else END
+            return "record_discovery"
         if state["collection_action"] == "ask" or state["collection_steps"] >= 6:
-            return END
+            return "record_discovery"
         return "collect"

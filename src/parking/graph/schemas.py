@@ -45,6 +45,8 @@ class Intent(StrictModel):
     language: Literal["en"]
     facilities: list[Literal["CTR", "RIV", "STA", "AIR"]]
     retrieval_question: str = Field(min_length=1, max_length=4000)
+    explain_spot_id: bool = False
+    lookup_only: bool = False
 
 
 class EvidenceDocument(StrictModel):

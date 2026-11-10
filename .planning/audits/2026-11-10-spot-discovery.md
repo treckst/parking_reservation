@@ -13,3 +13,15 @@ Preserve checkpoint history and immutable per-query evidence. Pending and approv
 requests block overlaps; actual writes still revalidate under BEGIN IMMEDIATE.
 Date-only candidates must not be claimed available for an unspecified interval.
 No fixture regeneration, PII projections, model-generated SQL or unfiltered reads.
+
+## Automated verification
+
+F-01: e0e5301; scoped lookup/booking-write checks passed (27 tests).
+F-02: 3639346; independent date/duration and follow-up checks passed (92 tests).
+F-03: database-backed choices, staged concise replies, ID explanation, validated
+space selection, lookup-only submission guard and immutable SQL evidence.
+Full suite: 138 passed, 3 opt-in deployed tests skipped. One existing community
+retriever deprecation warning. Existing tests expecting an unexplained spot-ID
+request were updated to verify the new space-choice workflow.
+
+Build and configured-model verification: pending.

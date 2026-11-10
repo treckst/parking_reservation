@@ -7,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 
 from parking.graph.collection import ReservationCollector, draft_snapshot
 from parking.graph.dates import DateNormalizer
+from parking.graph.discovery import ParkingDiscovery
 from parking.graph.schemas import ReservationState, ReservationOutput, ReservationSummary
 
 
@@ -18,8 +19,9 @@ async def ask(model_factory, schema, instruction, data):
 
 
 def build_reservation_graph(model_factory, store):
-    collector = ReservationCollector(model_factory)
+    collector = ReservationCollector(model_factory, store)
     normalizer = DateNormalizer(model_factory)
+    discovery = ParkingDiscovery(store)
 
     async def summarize(state):
         summary = await ask(model_factory, ReservationSummary,
@@ -46,16 +48,21 @@ def build_reservation_graph(model_factory, store):
 
     workflow = StateGraph(ReservationState, output_schema=ReservationOutput)
     workflow.add_node("normalize_dates", normalizer.normalize)
+    workflow.add_node("lookup_spots", discovery.lookup)
+    workflow.add_node("record_discovery", discovery.record)
     workflow.add_node("prepare_collection", collector.prepare)
     workflow.add_node("collect", collector.agent)
     workflow.add_node("collection_tools", collector.tool_node)
     workflow.add_node("summarize", summarize)
     workflow.add_node("persist_pending", persist)
     workflow.add_edge(START, "normalize_dates")
-    workflow.add_edge("normalize_dates", "prepare_collection")
+    workflow.add_edge("normalize_dates", "lookup_spots")
+    workflow.add_edge("lookup_spots", "prepare_collection")
     workflow.add_edge("prepare_collection", "collection_tools")
     workflow.add_conditional_edges("collect", collector.after_agent)
     workflow.add_conditional_edges("collection_tools", collector.after_tools)
+    workflow.add_conditional_edges("record_discovery", lambda s: "persist_pending"
+        if s.get("collection_action") == "submit" and draft_snapshot(s.get("booking_draft", {}))["ready"] else END)
     workflow.add_conditional_edges("persist_pending", lambda s: "summarize" if s.get("reservation_id") else END)
     workflow.add_edge("summarize", END)
     return workflow

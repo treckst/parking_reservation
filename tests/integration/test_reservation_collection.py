@@ -19,7 +19,7 @@ async def test_partial_collection_restart_correction_and_submit(store, tmp_path)
         graph = build_graph(lambda: BookingModel(draft=first), checkpointer=saver, booking_store=store)
         result = await graph.ainvoke({"message": "Book with these initial details", "request_id": "collection_00001"}, config)
         assert "__interrupt__" not in result and not store.pending()
-        assert "end date and time" in result["final_reply"] and "vehicle plate" in result["final_reply"]
+        assert "end time or duration" in result["final_reply"]
         assert "first name" not in result["final_reply"] and "spot ID" not in result["final_reply"]
         state = (await graph.aget_state(config)).values
         assert state["booking_draft"]["name"] == DRAFT["name"]
@@ -85,7 +85,7 @@ async def test_inspect_observes_tool_update_and_early_submission_cannot_write(st
     assert snapshots[2]["draft"]["name"] == "OnlyName" and "name" not in snapshots[2]["missing_fields"]
     assert not snapshots[3]["ready"]
     assert state["booking_draft"]["name"] == "OnlyName"
-    assert "first name" not in result["final_reply"] and "surname" in result["final_reply"]
+    assert "first name" not in result["final_reply"] and "Which space" in result["final_reply"]
     assert not store.pending() and "__interrupt__" not in result
 
 
@@ -115,7 +115,7 @@ async def test_read_loop_is_bounded_without_a_booking(store):
     model = ScriptedModel([("inspect_reservation_draft", {})] * 6)
     result, state = await run_collection(store, model)
     assert not model.steps and not store.pending()
-    assert "Please provide" in result["final_reply"]
+    assert "Which space" in result["final_reply"] and "CTR-001" in result["final_reply"]
 
 
 async def test_initial_inspection_is_mandatory_even_when_model_skips_it(store):
@@ -123,7 +123,7 @@ async def test_initial_inspection_is_mandatory_even_when_model_skips_it(store):
     result, state = await run_collection(store, model)
     assert model.tool_results[0].name == "inspect_reservation_draft"
     assert json.loads(model.tool_results[0].content)["missing_fields"]
-    assert "vehicle plate" in result["final_reply"]
+    assert "Which space" in result["final_reply"] and "CTR-001" in result["final_reply"]
     assert not store.pending()
 
 
@@ -170,7 +170,8 @@ async def test_natural_dates_restart_followup_and_thread_isolation(store, tmp_pa
         model = NaturalBookingModel(draft={"name": "Yevhen", "surname": "Shmatkov"})
         graph = build_graph(lambda: model, checkpointer=saver, booking_store=store)
         result = await graph.ainvoke({"message": query, "request_id": "natural_dates_001"}, config)
-        assert "vehicle plate" in result["final_reply"] and "spot ID" in result["final_reply"]
+        assert "AIR-001" in result["final_reply"] and "Which space" in result["final_reply"]
+        assert "5 PLN/hour" in result["final_reply"] and "35 PLN" in result["final_reply"]
         assert "start date" not in result["final_reply"] and "first name" not in result["final_reply"]
         assert result["reservation_state"]["start"] == "2026-11-13T14:00:00+01:00"
         assert result["reservation_state"]["facility"] == "AIR"
@@ -179,7 +180,7 @@ async def test_natural_dates_restart_followup_and_thread_isolation(store, tmp_pa
         model = NaturalBookingModel(draft={"car_number": "ABC123"})
         graph = build_graph(lambda: model, checkpointer=saver, booking_store=store)
         result = await graph.ainvoke({"message": "ABC123", "request_id": "natural_dates_002"}, config)
-        assert result["final_reply"] == "Please provide your spot ID."
+        assert "Which space" in result["final_reply"] and "AIR-001" in result["final_reply"]
         state = (await graph.aget_state(config)).values
         assert state["booking_draft"]["name"] == "Yevhen"
         assert state["booking_draft"]["end"] == "2026-11-13T21:00:00+01:00"
@@ -187,5 +188,5 @@ async def test_natural_dates_restart_followup_and_thread_isolation(store, tmp_pa
         other = await graph.ainvoke({"message": "ABC123", "request_id": "natural_dates_003"},
                                    {"configurable": {"thread_id": "separate-customer"}})
         assert other["reservation_state"]["start"] is None
-        assert "first name" in other["final_reply"]
+        assert "Please provide a date" in other["final_reply"]
         assert not store.pending()

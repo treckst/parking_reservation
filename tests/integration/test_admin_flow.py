@@ -33,8 +33,13 @@ def store(tmp_path):
     with sqlite3.connect(path) as db:
         db.executescript("""
             CREATE TABLE transport_slots (spot_id TEXT, slot_date TEXT, working_hours TEXT,
+                                          type TEXT DEFAULT 'standard', hourly_price REAL DEFAULT 8,
+                                          current_availability INTEGER DEFAULT 1,
                                           PRIMARY KEY(spot_id,slot_date));
-            INSERT INTO transport_slots VALUES ('CTR-001','2026-11-20','06:00-22:00');
+            INSERT INTO transport_slots (spot_id,slot_date,working_hours)
+                VALUES ('CTR-001','2026-11-20','06:00-22:00');
+            INSERT INTO transport_slots (spot_id,slot_date,working_hours,hourly_price)
+                VALUES ('AIR-001','2026-11-13','06:00-22:00',5);
             CREATE TABLE reservations (spot_id TEXT,start_time TEXT,end_time TEXT,status TEXT);
         """)
     return BookingStore(path)
@@ -114,7 +119,8 @@ async def test_nested_pause_restart_resume_preserves_state(store, tmp_path, deci
         assert store.get(reservation_id)["summary"] == state["reservation_summary"]
         assert state["booking_draft"] == json.loads(store.get(reservation_id)["draft"])
         assert model.calls["review"] == 0
-        assert state["evidence"] == before["evidence"]
+        assert all(state["evidence"][key] == value for key, value in before["evidence"].items())
+        assert state["evidence"]["2:1"]["sql_results"]
         assert len(state["messages"]) == 3
         assert store.claim_review(reservation_id, decision)
     # New saver/compiled graph: no process-local graph state is required.
@@ -126,7 +132,7 @@ async def test_nested_pause_restart_resume_preserves_state(store, tmp_path, deci
         assert state["admin_result"] == {"reservation_id": reservation_id, "status": status, "reason": None}
         assert not {"admin_decision", "admin_response", "admin_messages"} & state.keys()
         assert ("approved" if decision == "approve" else "rejected") in output["final_reply"]
-        assert state["evidence"] == before["evidence"]
+        assert all(state["evidence"][key] == value for key, value in before["evidence"].items())
         assert set(state["queries"]) == {"policy_000000001", "booking_00000001"}
         assert len(state["messages"]) == 4
         assert model.calls["draft"] == model.calls["review"] == 1

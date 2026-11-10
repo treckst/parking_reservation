@@ -5,7 +5,8 @@ from langgraph.graph import END, START, StateGraph
 
 from parking.bookings import BookingStore
 from parking.graph.admin import build_admin_graph
-from parking.graph.collection import draft_snapshot, missing_details_question
+from parking.graph.collection import draft_snapshot
+from parking.graph.discovery import reservation_question
 from parking.graph.nodes import PolicyNodes
 from parking.graph.policy import build_policy_graph
 from parking.graph.reservation import build_reservation_graph
@@ -36,8 +37,9 @@ def build_graph(model_factory=create_llm, retriever=retrieve, *, checkpointer=No
 
     def booking_reply(state):
         if state.get("booking_error"):
-            if draft_snapshot(state.get("booking_draft", {}))["missing_fields"]:
-                text = missing_details_question(state.get("booking_draft", {}))
+            if (draft_snapshot(state.get("booking_draft", {}))["missing_fields"] or
+                    state.get("intent", {}).get("lookup_only") or state.get("intent", {}).get("explain_spot_id")):
+                text = reservation_question(state)
             elif state["booking_error"] == "not_submitted":
                 text = "Your details are saved. Would you like me to submit this reservation for approval?"
             else:

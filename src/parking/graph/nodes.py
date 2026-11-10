@@ -95,19 +95,31 @@ class PolicyNodes:
             "hours, pricing, access, facilities and rules, even if the word policy is absent. "
             "Use reservation for a request to book, supply or correct booking details, or ask whether "
             "a proposed visit is possible (including facility, customer name and a natural-language "
-            "interval). Details-only answers to an assistant's missing-information question belong "
+            "interval). Also use reservation for available-space searches and parking prices/cost "
+            "queries: these use scoped SQL, not policy retrieval. Map City Centre to CTR, "
+            "Riverside to RIV, Station to STA and Airport to AIR. Use reservation with "
+            "explain_spot_id=true for 'what is spot id?' and equivalent space-label questions, "
+            "and set lookup_only=true for information-only availability, price and explanation "
+            "requests; these must never submit a booking. Use lookup_only=false when the customer "
+            "requests a reservation or supplies/chooses requested booking details. "
+            "preserving the known location/date/duration. Details-only answers to an assistant's missing-information question belong "
             "to reservation. Use the saved draft and conversation to resolve follow-ups. A proposed "
             "reservation must collect missing information, never fall back to policy retrieval merely "
-            "because the user did not say 'book'. Standalone live availability and cancellations are "
-            "unsupported. Use unsupported for unrelated topics or unavailable operations, not "
+            "because the user did not say 'book'. Cancellations are unsupported. "
+            "Use unsupported for unrelated topics or unavailable operations, not "
             "ordinary conversation or an underspecified parking request. Parking information "
             "questions remain policy even with an active draft. Resolve facility only from explicit "
             "current text or unambiguous conversation context. Otherwise use all CTR/RIV/STA/AIR. "
             "Create a standalone retrieval question preserving original meaning and constraints.",
             {"message": state["message"], "safe_history": history,
-             "booking_draft": state.get("booking_draft", {})},
+             "booking_draft": state.get("booking_draft", {}), "parking_search": state.get("parking_search", {})},
         )
         facilities = intent.facilities or ["CTR", "RIV", "STA", "AIR"]
+        if intent.kind == "conversation" and state.get("parking_search", {}).get("facility"):
+            # Refresh scoped choices when helping with an existing search; a
+            # general help/thanks message must never submit the saved draft.
+            intent.kind = "reservation"
+            intent.lookup_only = True
         intent.facilities = list(dict.fromkeys(facilities))
         records = state.get("queries", {})
         existing = records.get(state["request_id"])
