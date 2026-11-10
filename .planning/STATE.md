@@ -4,10 +4,10 @@ current_phase: 01
 current_phase_name: Persistent Grounded Policy Chat
 status: Phase 1 implementation recorded; verification skipped by explicit user request
 stopped_at: Plans 01-02 through 01-08 implemented with acceptance evidence unverified
-last_updated: "2026-11-10T14:37:08.553Z"
+last_updated: "2026-11-10T14:43:52.175Z"
 last_activity: 2026-11-10
-last_activity_desc: Completed English-only structured language gate; 83 offline Python and 3 JS tests pass; deployment not rebuilt.
-state_head: 1e246a60663cfdef3bd97b954a46072e11beabc2
+last_activity_desc: Admin ToolNode now finalizes pending reservations and returns admin_result; 88 offline Python and 3 JS tests pass; deployment not rebuilt.
+state_head: 4a8941200e2c233a12d18daaedb2a50e0b9c7797
 progress:
   total_phases: 4
   completed_phases: 0
@@ -36,7 +36,7 @@ Phase: 01 (Persistent Grounded Policy Chat) — IMPLEMENTED / UNVERIFIED
 Plan: 8 of 8 implementation summaries recorded; new acceptance checks unverified
 Status: Phase 1 implementation recorded; verification skipped by explicit user request
 Roadmap: APPROVED by the user on 2026-11-10
-Last activity: 2026-11-10 - Completed quick task 261110-llb: English-only application and structured language gate; 83 offline Python and 3 JS tests passed.
+Last activity: 2026-11-10 - Completed quick task 261110-lqr: Pending reservation handoff and admin ToolNode finalization via shared admin_result; 88 offline Python and 3 JS tests passed.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -63,6 +63,8 @@ Progress: [░░░░░░░░░░] 0%
 
 Full decisions are recorded in PROJECT.md and REQUIREMENTS.md.
 
+- [Quick 261110-lqr, 2026-11-10]: Customer reservation graph collects details and persists pending before summarization. Its reservation_id, booking_draft and reservation_summary pass directly to the compiled admin subgraph through shared keys. The admin LLM's decision runs through its private ToolNode, which revalidates booking rules transactionally and updates the same row to approved/rejected. Only admin_result returns to the main graph for the customer reply. This supersedes the earlier parent mock continuation and confirmed application-request status; legacy fixture statuses remain unchanged. Administrator API review/resume remains required.
+
 - [Quick 261110-llb, 2026-11-10]: Customer chat and generated summaries/replies are English-only. A strict structured-output language node rejects non-English or unclear requests before downstream graph execution. This supersedes earlier bilingual acceptance expectations.
 
 - All 49 v1 requirements, Vertical MVP delivery, and the four-phase roadmap are user-approved.
@@ -78,11 +80,12 @@ Full decisions are recorded in PROJECT.md and REQUIREMENTS.md.
 
 None yet.
 
-Quick task 261110-l6s implements the user-requested approval architecture ahead
-of later phase work: compiled reservation/admin subgraphs, intent summary and
-pending SQLite hold before interrupt, structured admin decision and conditional
-mock continuation. Admin surface remains API-only. Source checks pass; container
-images have not been rebuilt and deployed acceptance remains unverified.
+Quick tasks 261110-l6s and 261110-lqr implement the approval architecture ahead
+of later phase work: compiled reservation/admin subgraphs, pending SQLite hold
+before summary and interrupt, structured admin decision and private ToolNode
+finalization. The parent reads admin_result. Admin surface remains API-only.
+Source checks pass; container images have not been rebuilt and deployed
+acceptance remains unverified.
 
 ### Blockers/Concerns
 
@@ -112,3 +115,4 @@ Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md
 | 261110-h7o | BM25/vector 0.4/0.6 ensemble, environment-based LangSmith tracing, containerized API and UI after graph health | 2026-11-10 | ba7f5e5 | — | .planning/quick/261110-h7o-hybrid-retrieval-tracing-and-containeriz |
 | 261110-l6s | Modular reservation and admin subgraphs, pending SQLite intent and API review/resume | 2026-11-10 | a124b86 | — | [261110-l6s-modular-reservation-and-admin-approval-s](./quick/261110-l6s-modular-reservation-and-admin-approval-s/) |
 | 261110-llb | English-only application and structured language gate | 2026-11-10 | 1e246a6 | complete | [261110-llb-english-only-application-with-structured](./quick/261110-llb-english-only-application-with-structured/) |
+| 261110-lqr | Pending reservation handoff and admin ToolNode finalization via shared admin_result | 2026-11-10 | 4a89412 | complete | [261110-lqr-persist-pending-reservation-and-finalize](./quick/261110-lqr-persist-pending-reservation-and-finalize/) |
