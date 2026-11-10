@@ -4,10 +4,10 @@ current_phase: 01
 current_phase_name: Persistent Grounded Policy Chat
 status: Phase 1 implementation recorded; verification skipped by explicit user request
 stopped_at: Plans 01-02 through 01-08 implemented with acceptance evidence unverified
-last_updated: "2026-11-10T19:23:26.578Z"
+last_updated: "2026-11-10T19:52:16.768Z"
 last_activity: 2026-11-10
 last_activity_desc: README refreshed and UI gateway simplified; 15 targeted tests pass; fresh canonical graph/API images deployed and all five Compose services healthy.
-state_head: 4525aec9ae95bcf07b33733b85feca9d648eb89c
+state_head: 3af2472261b6bf0ce9e51c41c04a027bd8823700
 progress:
   total_phases: 4
   completed_phases: 0
@@ -126,3 +126,4 @@ Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md
 | 261110-qec | Ensure booking state asks for name, surname, and car number, and transactionally writes confirmed reservations on approval | 2026-11-10 | 5a1fc17 | — | [261110-qec-ensure-booking-state-asks-for-name-surna](./quick/261110-qec-ensure-booking-state-asks-for-name-surna/) |
 | 9 | Remove obsolete admin API/recovery code and tests; clear booking_requests and the specified confirmed reservation | 2026-11-10 | 4a55914 | — | — |
 | 261110-rzu | Update README, simplify UI gateway, build a fresh graph image and recreate healthy Docker Compose services | 2026-11-10 | 4525aec | — | [261110-rzu-update-readme-remove-redundant-api-gatew](./quick/261110-rzu-update-readme-remove-redundant-api-gatew/) |
+| 11 | Final repository commit: fixture scripts/PDFs, Python version, project document changes and local-file ignore rules | 2026-11-10 | 3af2472 | — | — |
