@@ -1,229 +1,131 @@
 # Parking Reservation Assistant
 
-Local parking reservation and information chat using LangChain, LangGraph, the Agent Server SDK,
-FastAPI, Chroma, and separate SQLite files. Compiled policy, reservation and admin
-subgraphs preserve conversation state. The customer agent uses a bound-tool loop
-to inspect/update its draft and ask for missing fields across turns. It collects details,
-saves a pending SQLite reservation, then passes its ID and summary to the compiled
-admin subgraph. Its automatic structured LLM review runs through a ToolNode that
-transactionally marks the request approved and inserts a confirmed row into
-`reservations`; rejection leaves no confirmed row. The parent replies from admin_result.
-The REST API serves the chat UI; admin decisions run entirely inside the parent graph.
-See [automatic admin review](docs/admin-approval.md) for the shared-state handoff and database writes.
+A local English-language parking chat built with LangChain, LangGraph, FastAPI,
+SQLite and Chroma. The REST API serves the UI and submits requests to the graph
+server through `langgraph_sdk`.
 
-The assistant offers reservation help and parking information. Greetings and
-general questions such as "can you help?" use a conversational route, with no
-document retrieval or booking write. Help with an incomplete draft asks only for
-missing details. Questions about locations, hours, prices, access and rules use
-grounded retrieval; unknown facts remain unavailable without restricting the
-customer to policy questions.
+## How it works
 
-Customer chat is English-only. The `check_language` node uses a strict structured
-LLM decision before safety checks, intent classification, retrieval or reservation
-execution. Non-English, mixed-language and unclear requests receive a fixed English
-request to rephrase. Booking identifiers, names, dates and times are allowed in
-English requests and details-only follow-ups. All replies and review summaries
-use English; rejected turns preserve earlier evidence and booking drafts.
+- The assistant offers spaces and prices for City Centre (`CTR`), Riverside
+  (`RIV`), Station (`STA`) and Airport (`AIR`). SQL searches always filter by
+  location, and by date and space type when supplied. Exact times are required
+  to check interval availability; the fixture availability flag is a snapshot.
+- Reservation details are extracted into a separate structured schema before
+  SQL or collection. Natural-language dates become Europe/Warsaw timestamps.
+  Each field is saved independently across turns; missing or ambiguous fields
+  produce follow-up questions. Required fields are space, start/end, first name,
+  surname and vehicle plate.
+- A complete request creates a pending hold in `booking_requests`. The compiled
+  admin subgraph receives the saved draft and summary through shared state keys
+  and automatically approves or rejects it. Its ToolNode rechecks SQL rules and
+  atomically inserts a `confirmed` reservation and marks the request `approved`,
+  or marks the request `rejected`. The parent replies from the persisted result.
+- Parking rules use existing Chroma pages with BM25/dense retrieval weighted
+  0.4/0.6 and source/page citations. One semantic rewrite is attempted when the
+  initial evidence is insufficient. Conversation history and earlier retrieval
+  evidence remain checkpointed; availability is refreshed for each search/write.
+- Customer output excludes private draft fields and other customers' records.
+  Admin decisions run entirely inside the parent graph, without admin HTTP
+  endpoints or human approval. Cancellation is not implemented.
 
-The classifier and reservation collector receive the full role-labelled customer
-conversation from the thread checkpoint. Classification also receives the saved
-draft. Collection always executes `inspect_reservation_draft` before its first
-LLM call; inspection is not optional model behavior. Policy evidence and admin
-tool history are separate channels, not customer conversation messages. Policy
-answer generation receives current retrieved evidence rather than the entire chat.
+See [the admin subgraph](docs/admin-approval.md) for its handoff and transaction
+contract. The application uses `ChatOpenAI(model="gpt-6-luna")` and
+`OpenAIEmbeddings(check_embedding_ctx_length=False)`.
 
-A mandatory `ReservationExtraction` structured-output step runs before SQL and
-collection. It saves each supplied field independently through explicit `set`,
-`clear`, or `clarify` operations; omitted fields survive. Invalid/ambiguous values
-block only their field and cannot erase valid siblings. Draft tools use the same
-explicit patch semantics for names, plates and space selection. Inspection and
-pending-write readiness both check unresolved field errors as well as required
-values; unresolved fields cannot produce a pending booking.
+## Setup and start
 
-Dates use Europe/Warsaw time and the correct seasonal offset. An omitted year
-uses the existing visit year or the next occurrence of a named month/day from the
-reference date. For example, on November 10, 2026, "24th of November, 3pm up to
-20:00" becomes November 24, 2026, 15:00-20:00. Only unresolved fields trigger a
-follow-up. Date-only changes preserve/rebase known local times; start-only changes
-preserve known ends. A date and duration survive vague phrases such as "six hours
-in the evening"; a later start time completes the interval. The public state
-includes date, duration and requested space type alongside start/end and space ID,
-with personal fields kept in the private draft.
+Requirements: Python 3.12, uv, Docker Desktop/Compose, and an existing local
+`.env` with these credentials:
 
-Before collecting personal details, reservation, availability and parking-price
-requests query SQLite for up to three matching spaces and their PLN hourly and
-whole-stay costs. The location is always bound as a prefix (`CTR-%`, `AIR-%`, etc.)
-using SQLite case-insensitive LIKE, with `slot_date = ?` whenever a date is known
-and `type = ?` whenever the customer supplied a space type.
-A date-only query offers candidates and rates, explicitly requiring exact times
-before availability is known. Complete intervals check operating hours and
-exclude overlaps with legacy bookings and pending/approved holds; the seed's
-`current_availability` snapshot is not a live interval guarantee.
+| Variable | Purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | Chat and query embeddings |
+| `LANGSMITH_API_KEY` | Agent Server authentication with the required account access |
+| `LANGGRAPH_CLOUD_LICENSE_KEY` | Alternative Agent Server license, when applicable |
+| `LANGSMITH_TRACING` | Optional tracing switch; Compose defaults to `true` |
 
-Customers choose an offered space (including "the first one") rather than needing
-to know an internal ID. Once selected, the assistant asks for every missing
-required field, including first name, surname, vehicle plate and any outstanding
-visit times.
-After an offered-space question, accepting a type ("I'd like the standard place")
-accepts any matching available space. A separate structured choice intent records
-that acceptance; SQL rechecks the location/date/type/interval and selects a matching
-label, which the next reply discloses before asking for missing personal details.
-The pending-question context survives checkpoint restarts. Type preferences while
-still entering visit details, price comparisons, ambiguous replies and explicit
-requests to wait do not authorize automatic selection. Unclear acceptance gets a
-focused confirmation question instead of repeating the same generic offer.
-Changing location clears an incompatible selected space and refreshes the scoped
-options. SQL evidence uses the same immutable per-query reducer as retrieved pages;
-customer identity columns never enter search results. Quotes do not hold a space,
-and reservation writes still revalidate transactionally. Information-only queries
-cannot submit even a complete saved draft.
+The graph needs access to LangSmith authentication even when tracing is disabled.
+A DNS failure, authentication timeout or invalid credential can prevent startup.
+Credentials are injected at runtime and must stay out of source and image builds.
 
-## Setup
-
-Use the project's Python 3.12 environment, uv, and Docker Compose. Copy the
-names in `.env.example` into your local `.env`, preserving existing values.
-Supply OpenAI and applicable Agent Server credentials locally. No customer
-accounts or application API keys are used. Credentials never belong in git.
+Run from the repository root:
 
 ```powershell
-uv sync --locked
-# If the fixture database is missing, create it once before starting services:
+uv sync --dev
+# Run only if the fixture database is missing:
 uv run python ingested_mock_data/seed_database.py
+
 $env:PYTHONUTF8="1"
 uv run langgraph build -t parking-graph:phase01
 docker compose --env-file .env -f docker/compose.yaml up -d --build --wait
 ```
 
-Open http://127.0.0.1:8080. Compose starts the API container after the graph is
-healthy. The API container serves both REST endpoints and the existing chat UI.
-The API invokes only the remote SDK; it has no in-process graph fallback.
-The private local Agent Server listens on loopback port 8123. Keep this local
-trusted demo off public networks: its internal server has no customer login.
+Build the graph image first; the API image derives from it. After changing source,
+repeat both build/start commands. To restart existing containers without rebuilding:
 
-The graph image pins API version `0.17.1`. The base image pulled during execution
-reported digest `sha256:38a5667c193e1b8540650cfa5c1329632e8f443c9ab2d714cf257b4a0804328d`;
-this records the observed base, not a successful application image build.
-The final application image built and Compose started all services; details are
-recorded in `.planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md`.
-Runtime dependencies are declared in
-`pyproject.toml` with the existing lock. Container addresses are `chromadb:8000`,
-`postgres:5432` and `redis:6379`. Compose waits for their health checks. The
-existing `chroma_data` volume is preserved. Do not delete/reseed it or regenerate
-embeddings as part of starting the app. If that volume is empty, follow the
-existing ingestion instructions separately; startup does not populate it.
+```powershell
+docker compose --env-file .env -f docker/compose.yaml restart
+docker compose --env-file .env -f docker/compose.yaml ps
+```
 
-The exact clients remain `ChatOpenAI(model="gpt-6-luna")` and
-`OpenAIEmbeddings(check_embedding_ctx_length=False)`. No startup provider or
-embedding-provenance probe runs. Provider/configuration failures are service
-failures; they never cause model substitution or a semantic retrieval retry.
+Open **http://127.0.0.1:8080**. The graph server is at
+`http://127.0.0.1:8123`, and Chroma at `http://127.0.0.1:8000`.
+Compose waits for Chroma, PostgreSQL and Redis before starting the graph, then
+waits for graph health before starting the API. This is a trusted local demo
+without customer login; the published ports bind to loopback.
 
-Graph tracing is controlled by Compose environment interpolation:
-`LANGSMITH_TRACING` (defaults to `true`) and `LANGSMITH_ENDPOINT`.
-Agent Server supplies the `parking` agent destination. Compose clears project
-destination variables and their legacy aliases for this service to prevent the
-SDK's `EnvAddressError` when a project and agent address are both set.
-Standalone host scripts may still use `LANGSMITH_PROJECT` in `.env`.
-Export tracing/endpoint variables or set them
-in the root `.env` and use `docker compose --env-file .env ...` as above. Shell
-values take precedence; explicitly setting tracing to `false` disables it.
-Keys stay runtime environment values, never image build arguments or source.
+Startup reuses the existing `parking_documents` collection. It does not ingest
+or re-embed PDFs. For a missing collection or deliberate corpus update, follow
+[the fixture/ingestion instructions](ingested_mock_data/README.md), then restart
+the graph to refresh cached keyword indexes. Preserve the existing Docker volumes.
 
-The graph receives `LANGSMITH_API_KEY` directly from the root `.env` through
-the service's `env_file`, including when running `docker compose up -d` from
-`docker/`. Agent Server requires a valid key with LangGraph Cloud access (or an
-applicable `LANGGRAPH_CLOUD_LICENSE_KEY`) even if tracing is disabled. If the
-graph exits with code 3 and logs `License verification failed`, check that
-credential and account access. Do not add an empty `LANGSMITH_API_KEY` entry
-under Compose `environment`: it overrides the credential from `env_file`.
+## UI API
 
-Retrieval combines LangChain BM25 and dense Chroma retrievers using
-`EnsembleRetriever(weights=[0.4, 0.6])`. Reciprocal-rank fusion deduplicates by
-stable source/page identity. BM25 reads the existing approved Chroma page text;
-both branches apply the same facility/shared-policy scope. The corpus is not
-modified or re-embedded. Restart the graph after deliberate corpus updates to
-refresh cached keyword indexes.
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/api/threads` | Create a browser-owned conversation |
+| POST | `/api/chat` | Submit `thread_id`, `request_id` and `message` |
+| GET | `/api/threads/{thread_id}/requests/{request_id}` | Poll a request |
+| GET | `/api/threads/{thread_id}/conversation` | Restore conversation messages |
+| GET | `/health` | API process health |
 
-In `docker/api.Dockerfile`, Uvicorn imports the `create_app` factory from
-`parking.api.app` and listens on `0.0.0.0:8080` inside the container. Compose
-publishes it only at `127.0.0.1:8080` on the host. The graph is reached through
-`http://graph:8000`, rather than the API container's localhost. For optional
-host-only development the equivalent command is:
-`uv run --env-file .env uvicorn parking.api.app:create_app --factory --app-dir src --host 127.0.0.1 --port 8080`.
+Replies expose `pending`, `completed` or `failed` plus a safe graph output when
+complete. The gateway preserves request IDs and reconciles lost acknowledgements
+without blindly starting duplicate graph runs. It reads graph state only after a
+successful run and never returns raw checkpoints.
 
-The dedicated API image derives from `parking-graph:phase01` to share installed
-dependency versions, then replaces its entrypoint with Uvicorn and copies the
-current application/UI source. Build the graph first, as shown above. Runtime
-graph credentials are injected by Compose and are not baked into either image.
+## Storage
 
-## Storage and recovery
+| Data | Host location |
+| --- | --- |
+| Daily spaces, requests and confirmed reservations | `ingested_mock_data/parking_november_2026.sqlite3` |
+| Conversation checkpoints | `.runtime/graph/checkpoints.sqlite3` |
+| Browser/thread ownership and submission ledger | `.runtime/application.sqlite3` |
+| Agent Server scheduling and metadata | Compose PostgreSQL volume |
+| Retrieved page collection | Compose Chroma volume |
 
-Graph checkpoints use the exact synchronous `SqliteSaver`, with an asynchronous
-serialized adapter loaded through `langgraph.json`'s server lifecycle hook.
-The local connection is created outside graph nodes and closed after worker
-drain. Compose mounts the whole `.runtime/graph` directory at `/state`, including
-SQLite journals, and uses `/state/checkpoints.sqlite3`. PostgreSQL holds Agent
-Server scheduling/metadata; it does not replace the custom checkpoint file.
+The fixture covers November 2026. The booking schema migration preserves existing
+reservations while removing the seed's November 1-10-only reservation constraint.
+Pending holds and confirmed bookings both prevent interval overlaps.
 
-The API uses `.runtime/application.sqlite3` (mounted at `/state/application.sqlite3`)
-for owner/thread bindings and
-the submission ledger. Keep it separate from checkpoints and the preserved
-`ingested_mock_data/parking_november_2026.sqlite3` fixture. Run one graph server
-against this checkpoint file. Separate API processes can share the registry;
-short SQLite transactions enforce one active request per thread.
-
-Requests have immutable IDs and exact-message fingerprints. A lost create
-acknowledgement is reconciled using paginated SDK run metadata. Unknown acceptance
-remains pending and is never blindly resubmitted. If there is no matching run,
-the conservative outcome remains pending; an operator may need to investigate.
-Only a confirmed terminal failure enables Retry. Conversation restore uses
-stored user messages and guarded final responses, never raw graph state/events.
-
-The UI uses per-tab session storage and Web Locks to detach duplicated active
-tabs. Refresh restores the thread and reconnects pending requests. New chat keeps
-old server data. **Browser restoration can preserve both session storage and
-cookies after closing all windows. Strict fresh-conversation-on-browser-reopen
-(D-06) is not established.** Browsers without Web Locks detach on load, so refresh
-continuity is also not established there. The target-browser matrix is unverified.
+Run one graph server against the custom SQLite checkpoint file. The UI uses
+session storage and Web Locks for tab continuity. Refresh reconnects to the saved
+thread; New chat creates another thread. Browser session restoration can retain
+an old conversation after reopening the browser.
 
 ## Tests
 
-The original phase execution skipped acceptance checks using `--skip-gates
---no-verify`. The hybrid/container follow-up ran its focused tests; see its
-summary in `.planning/quick/`. Full phase acceptance remains separate.
+Offline tests use temporary storage and mock provider calls. Disable tracing for
+the test process to avoid waiting on external trace uploads:
 
 ```powershell
-uv run pytest -m "not deployed and not live_model" -q
+$env:LANGSMITH_TRACING="false"
+$env:LANGCHAIN_TRACING_V2="false"
+uv run pytest -q
 node --test tests/web/chat.test.mjs
 ```
 
-Tests mock provider calls. The local corpus cases inspect the actual PDF pages;
-they do not prove live model accuracy. An optional real Chroma check queries a
-stored page vector, proving read-only source identity rather than new-question
-embedding quality:
-
-```powershell
-$env:TEST_CHROMA_HOST="127.0.0.1"
-uv run pytest tests/integration/test_chroma_retrieval.py --require-external -q
-```
-
-The external journey requires a disposable, separately configured graph/API,
-mocked OpenAI-compatible provider endpoint (`OPENAI_BASE_URL`), and explicit
-test-only environment variables: `TEST_API_URL`, `TEST_GRAPH_URL`,
-`TEST_CHECKPOINT_PATH`, `TEST_PROVIDER_MOCKED=1`, `TEST_ALLOW_GRAPH_RESTART=1`.
-The restart command targets the graph service in this repository's Compose file;
-do not point it at a shared/non-test graph. The mocked provider must return
-valid schema-specific responses and collection-compatible embedding vectors.
-No fake provider is selected automatically in the application.
-
-```powershell
-uv run pytest tests/integration/test_deployed_chat.py --require-external -q
-```
-
-Missing explicitly required external settings fail with `--require-external`.
-Otherwise external tests skip. A skipped check is unverified. The external
-journey is not a complete acceptance matrix: contention/crash cases have local
-mocked coverage, while deployed reconciliation and browser behavior still need
-observed evidence. Manually check refresh, duplicate/new tabs, close/reopen with
-restoration enabled/disabled, New chat, pending drafts, Retry and accepted-request
-reconnection. Record actual image digest, hook startup logs and separate-file
-checkpoint persistence before claiming deployment acceptance.
+External Chroma/deployed tests are opt-in and skip when their prerequisites are
+absent. Their setup is described in `tests/integration/test_chroma_retrieval.py`
+and `tests/integration/test_deployed_chat.py`. Run deployed tests only against a
+disposable test deployment.

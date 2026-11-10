@@ -57,19 +57,15 @@ class Gateway:
             row = self.submissions.get(owner, thread_id, request_id)
         if row["status"] == "accepted":
             run = await asyncio.wait_for(self.client.runs.get(thread_id, row["run_id"]), timeout=20)
-            if run["status"] in ("success", "interrupted"):
-                # Read only after confirmed completion; never forward the raw state.
-                await asyncio.wait_for(self.client.runs.join(thread_id, row["run_id"]), timeout=20)
+            if run["status"] == "success":
+                # Success already confirms completion; project only safe output fields.
                 state = await asyncio.wait_for(self.client.threads.get_state(thread_id), timeout=20)
                 values = state.get("values", {})
-                if run["status"] == "interrupted":
-                    self.submissions.transition(row, "accepted", "proven_failed")
-                    return self.project(self.submissions.get(owner, thread_id, request_id))
                 output = GraphOutput.model_validate({key: values.get(key) for key in GraphOutput.model_fields})
                 if output.request_id != request_id:
                     raise ValueError("Mismatched final response")
                 self.submissions.transition(row, "accepted", "completed", result=output.model_dump())
-            elif run["status"] in ("error", "timeout"):
+            elif run["status"] in ("error", "timeout", "interrupted"):
                 self.submissions.transition(row, "accepted", "proven_failed")
             row = self.submissions.get(owner, thread_id, request_id)
         return self.project(row)

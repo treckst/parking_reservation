@@ -15,7 +15,7 @@ from parking.settings import Settings
 def api(tmp_path):
     sdk = SimpleNamespace(
         threads=SimpleNamespace(create=AsyncMock(side_effect=lambda: {"thread_id": str(uuid4())}), get_state=AsyncMock()),
-        runs=SimpleNamespace(create=AsyncMock(return_value={"run_id": "run-1"}), get=AsyncMock(return_value={"status": "pending"}), list=AsyncMock(return_value=[]), join=AsyncMock()),
+        runs=SimpleNamespace(create=AsyncMock(return_value={"run_id": "run-1"}), get=AsyncMock(return_value={"status": "pending"}), list=AsyncMock(return_value=[])),
     )
     settings = Settings(checkpoint_path=tmp_path / "checkpoints.db", application_path=tmp_path / "registry.db")
     app = create_app(settings, sdk)
@@ -76,6 +76,18 @@ def test_foreign_origin_denied(api):
     response = client.post("/api/threads", headers={"Origin": "https://attacker.example"})
     assert response.status_code == 403
     sdk.threads.create.assert_not_awaited()
+
+
+@pytest.mark.parametrize("status", ["error", "timeout", "interrupted"])
+def test_terminal_failure_does_not_read_graph_state(api, status):
+    client, sdk, app = api
+    thread_id = client.post("/api/threads").json()["thread_id"]
+    sdk.runs.get.return_value = {"status": status}
+    response = client.post("/api/chat", json={
+        "thread_id": thread_id, "request_id": "request_00000001", "message": "Hours?"})
+    assert response.json()["status"] == "failed"
+    assert response.json()["reply"] is None and response.json()["retryable"]
+    sdk.threads.get_state.assert_not_awaited()
 
 
 def test_ui_assets_and_health_do_not_require_graph_calls(api):

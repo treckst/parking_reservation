@@ -19,7 +19,7 @@ def setup(tmp_path):
     registry.bind_thread(owner, thread_id)
     ledger = Submissions(registry)
     settings = Settings(checkpoint_path=tmp_path / "checkpoints.db", application_path=registry.path)
-    client = SimpleNamespace(runs=SimpleNamespace(create=AsyncMock(), list=AsyncMock(), get=AsyncMock(), join=AsyncMock()), threads=SimpleNamespace(get_state=AsyncMock()))
+    client = SimpleNamespace(runs=SimpleNamespace(create=AsyncMock(), list=AsyncMock(), get=AsyncMock()), threads=SimpleNamespace(get_state=AsyncMock()))
     return registry, owner, thread_id, ledger, Gateway(settings, ledger, client)
 
 
