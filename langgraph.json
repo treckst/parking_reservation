@@ -2,7 +2,7 @@
   "python_version": "3.12",
   "api_version": "0.17.1",
   "dependencies": ["."],
-  "graphs": {"parking": "./src/parking/graph/graph.py:graph"},
-  "checkpointer": {"path": "./src/parking/checkpoint.py:generate_checkpointer"},
+  "graphs": {"parking": "parking.graph.graph:graph"},
+  "checkpointer": {"path": "parking.checkpoint:generate_checkpointer"},
   "env": ".env"
 }
