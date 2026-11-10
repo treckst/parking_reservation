@@ -30,7 +30,26 @@ Deliver the approved 49-requirement local demo as four Vertical MVP slices: pers
   3. A customer can continue the same session-bound thread after later questions and a graph-server restart without losing messages or earlier query evidence; concurrent submissions to that thread are controlled without mixing replies or query identities.
   4. Attempts to expose hidden instructions, another session's conversation, sensitive records, or internal graph state cannot produce an unauthorized customer reply or tool action; the final reply passes the output guardrail.
   5. A local operator can build and start the policy-chat slice with persistent graph infrastructure, observe Chroma/PostgreSQL/Redis readiness before graph startup, and exercise the actual Agent Server and SDK transport using documented configuration.
-**Plans:** TBD
+**Plans:** 0/8 plans executed
+**Wave 1**
+- [ ] 01-01-PLAN.md
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 01-02-PLAN.md
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 01-03-PLAN.md
+- [ ] 01-06-PLAN.md
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 01-04-PLAN.md
+- [ ] 01-07-PLAN.md
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 01-05-PLAN.md
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 01-08-PLAN.md
 **UI hint:** yes
 
 **Slice order:** Resolve the model, embedding, runtime/import, and Agent Server prerequisite gates first. Build and start the graph image from deployment JSON and declared dependencies before adding the FastAPI `langgraph_sdk` chat hookup. Then expose the minimal customer chat and verify the deployed path; an in-process graph or development-server-only check does not establish this slice.
@@ -123,7 +142,7 @@ Keep the approved scope: local trusted demo, LangChain/LangGraph only, the confi
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Persistent Grounded Policy Chat | 0/TBD | Not started | - |
+| 1. Persistent Grounded Policy Chat | 0/8 | Planned     | - |
 | 2. Live Availability and Slot Grid | 0/TBD | Not started | - |
 | 3. Conversational Pending Reservations | 0/TBD | Not started | - |
 | 4. Administrator Decisions and Cancellation | 0/TBD | Not started | - |

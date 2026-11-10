@@ -9,7 +9,7 @@ created: "2026-11-10"
 
 # Phase 01 - Validation Strategy
 
-> Execution verification contract, seeded from 01-RESEARCH.md. No application checks have run. The planner must replace provisional task bindings below with actual plan/task/wave and threat IDs before plan checking.
+> Execution verification contract synchronized with 01-01 through 01-08 PLAN files. No application checks have run; status remains draft, nyquist_compliant false and wave_0_complete false.
 
 ## Test Infrastructure
 
@@ -17,11 +17,13 @@ created: "2026-11-10"
 |----------|-------|
 | Framework | pytest with pytest-asyncio, HTTPX, and langgraph-checkpoint-conformance; resolve compatible pinned dependencies during setup |
 | Config file | pyproject.toml - test configuration and dependencies must be added by the initial plan |
-| Quick run command | `uv run pytest tests/unit tests/integration/test_api_contract.py -q` |
+| Quick run command | `uv run pytest tests/unit tests/integration/test_api_contract.py -m "not deployed and not live_model" -q` |
 | Full deterministic command | `uv run pytest -m "not deployed and not live_model" -q` |
 | Saver prerequisite command | `uv run pytest tests/integration/test_checkpointer_conformance.py -q` |
-| Deployed/Chroma command | `uv run pytest tests/integration/test_deployed_chat.py tests/integration/test_chroma_retrieval.py -q` |
-| Configured live-model command | `uv run pytest tests/live/test_policy_cases.py -m live_model -q` |
+| Deployed command | `uv run pytest tests/integration/test_deployed_chat.py tests/integration/test_deployed_state.py tests/integration/test_recovery.py tests/integration/test_api_contract.py -m deployed --require-external -q` |
+| Real Chroma command | `uv run pytest tests/integration/test_chroma_retrieval.py --require-external -q` |
+| Configured live-model command | `uv run pytest tests/live/test_policy_cases.py -m live_model --require-external -q` |
+| Browser controller command | `node --test tests/web/chat.test.mjs` |
 | Runtime budget | Quick feedback target under 30 seconds; unmeasured. Container/model checks have separately bounded timeouts and may take longer. |
 
 ## Sampling Rate
@@ -34,16 +36,28 @@ created: "2026-11-10"
 
 ## Per-Task Verification Map
 
-Task bindings are provisional research groups. The planner must synchronize this table with the final PLAN.md tasks and security registers; no group below is a completed task.
+Actual plan bindings below cover all 16 tasks. All checks remain pending; task files are planned, not present yet. T-01-SC applies across the phase in addition to listed specific threats.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| Saver gate - bind during planning | Initial tracer | First | GRAPH-03, GRAPH-06, DEL-02 | Bind to plan register | Exact SqliteSaver adapter, external connection, separate file, thread isolation and safe deletion | conformance/integration | `uv run pytest tests/integration/test_checkpointer_conformance.py -q` | Missing - initial plan creates | Pending |
-| State/evidence - bind during planning | Policy slice | Bind during planning | GRAPH-02, GRAPH-04 | Bind to plan register | Validated state and stable query/attempt identities; no history loss or duplicate evidence | unit | `uv run pytest tests/unit/test_state.py -q` | Missing - initial plan creates | Pending |
-| Policy/guards - bind during planning | Policy slice | Bind during planning | GRAPH-01, RAG-02, RAG-05, PRIV-01, PRIV-05 | Bind to plan register | Supported claims only, one silent rewrite, safe partial answers, final-only guarded output | unit | `uv run pytest tests/unit/test_policy_flow.py tests/unit/test_guards.py -q` | Missing - initial plan creates | Pending |
-| API/recovery - bind during planning | Deployed chat | Bind during planning | API-01, API-05, GRAPH-03, GRAPH-06 | Bind to plan register | Ownership on every restore/recovery route; no duplicate accepted run or leaked raw state | contract/integration | `uv run pytest tests/integration/test_api_contract.py tests/integration/test_recovery.py -q` | Missing - initial plan creates | Pending |
-| Real services - bind during planning | Deployed tracer | Bind during planning | RAG-07, DEL-02, DEL-04, GRAPH-03 | Bind to plan register | Compatible query embeddings, private server, healthy dependency ordering, checkpoints survive restart | deployed/integration | `uv run pytest tests/integration/test_deployed_chat.py tests/integration/test_chroma_retrieval.py -q` | Missing - initial plan creates | Pending |
-| Live answers - bind during planning | Policy acceptance | Bind during planning | GRAPH-01, RAG-05, RAG-07 | Bind to plan register | English/Polish cited answers, four-facility comparison, rewrite success and final unsupported outcome | configured live model | `uv run pytest tests/live/test_policy_cases.py -m live_model -q` | Missing - initial plan creates | Pending |
+| 01-01-01 | 01-01 | 1 | GRAPH-01, RAG-07 | T-01-01 | Exact model/import/provenance; no asset writes | runtime/live | `uv run pytest tests/integration/test_runtime_prerequisites.py -m "not live_model" -q`<br>`uv run pytest tests/integration/test_runtime_prerequisites.py -m live_model --require-external -q` | Missing — this task creates/extends | Pending |
+| 01-01-02 | 01-01 | 1 | GRAPH-03, DEL-02 | T-01-02 | Exact saver lifecycle/isolation/conformance | conformance | `uv run pytest tests/integration/test_checkpointer_conformance.py -q` | Missing — this task creates/extends | Pending |
+| 01-02-01 | 01-02 | 2 | GRAPH-01, GRAPH-03, RAG-02, RAG-07, DEL-02, DEL-04 | T-01-03, T-01-04 | Private image, real Chroma, separate-file SDK/restart | deployed | `uv run pytest tests/integration/test_deployed_chat.py -m deployed --require-external -q` | Missing — this task creates/extends | Pending |
+| 01-02-02 | 01-02 | 2 | API-01, API-05, PRIV-01, PRIV-05 | T-01-03, T-01-04 | Owned safe browser/API/SDK tracer | contract/deployed | `uv run pytest tests/integration/test_deployed_chat.py -m "not deployed" -q`<br>`uv run pytest tests/integration/test_deployed_chat.py -m deployed --require-external -q` | Missing — this task extends tracer tests | Pending |
+| 01-03-01 | 01-03 | 3 | GRAPH-02, GRAPH-03, GRAPH-04 | T-01-05 | Immutable query/evidence/draft retention | unit/deployed | `uv run pytest tests/unit/test_state.py -q`<br>`uv run pytest tests/integration/test_deployed_state.py -m deployed --require-external -q` | Missing — this task creates/extends | Pending |
+| 01-03-02 | 01-03 | 3 | GRAPH-02, RAG-02 | T-01-05 | Current evidence and typed contextual routing | unit | `uv run pytest tests/unit/test_policy_context.py tests/unit/test_state.py -q` | Missing — this task creates/extends | Pending |
+| 01-04-01 | 01-04 | 4 | RAG-05, RAG-07 | T-01-06 | Cited bilingual partial/four-facility support | unit | `uv run pytest tests/unit/test_policy_flow.py -q` | Missing — this task creates/extends | Pending |
+| 01-04-02 | 01-04 | 4 | GRAPH-04, RAG-05 | T-01-07 | Single silent rewrite; same identity; explicit outage | unit | `uv run pytest tests/unit/test_policy_flow.py tests/unit/test_state.py -q` | Missing — this task creates/extends | Pending |
+| 01-05-01 | 01-05 | 5 | PRIV-01 | T-01-08 | User/document injection blocked structurally | adversarial unit | `uv run pytest tests/unit/test_guards.py -k input -q` | Missing — this task creates/extends | Pending |
+| 01-05-02 | 01-05 | 5 | PRIV-05, API-05 | T-01-09 | Final guard alone publishes; safe DTO/errors | unit/contract | `uv run pytest tests/unit/test_guards.py tests/integration/test_api_contract.py -m "not deployed" -q` | Missing — this task creates/extends | Pending |
+| 01-06-01 | 01-06 | 3 | GRAPH-03, GRAPH-04, GRAPH-06 | T-01-10, T-01-11 | Lost-ack reconciliation; no duplicate run | recovery/deployed | `uv run pytest tests/integration/test_recovery.py -m "not deployed" -q`<br>`uv run pytest tests/integration/test_recovery.py -m deployed --require-external -q` | Missing — this task creates/extends | Pending |
+| 01-06-02 | 01-06 | 3 | API-01, API-05, PRIV-01 | T-01-10, T-01-12 | Owned helpers; bounded Unicode; safe retry statuses | contract/recovery | `uv run pytest tests/integration/test_api_contract.py tests/integration/test_recovery.py -m "not deployed" -q` | Missing — this task creates/extends | Pending |
+| 01-07-01 | 01-07 | 4 | GRAPH-03, API-01 | T-01-13 | Refresh/tab isolation/New chat; D-06 browser gate | JS/contract/browser | `node --test tests/web/chat.test.mjs`<br>`uv run pytest tests/integration/test_browser_contract.py -q` | Missing — this task creates/extends | Pending |
+| 01-07-02 | 01-07 | 4 | GRAPH-06, API-01, API-05 | T-01-13 | Editable pending draft, final-only and recovery | JS/browser | `node --test tests/web/chat.test.mjs` | Missing — this task creates/extends | Pending |
+| 01-08-01 | 01-08 | 6 | GRAPH-01, RAG-05, RAG-07 | T-01-14 | Reviewed read-only real corpus/live responses | Chroma/live | `uv run pytest tests/integration/test_chroma_retrieval.py --require-external -q`<br>`uv run pytest tests/live/test_policy_cases.py -m live_model --require-external -q` | Missing — this task creates/extends | Pending |
+| 01-08-02 | 01-08 | 6 | All 14 Phase 1 IDs | T-01-01–T-01-14 | Full required restart/recovery/privacy/browser evidence | full/deployed/browser | `uv run pytest -m "not deployed and not live_model" -q`<br>`node --test tests/web/chat.test.mjs`<br>`uv run pytest tests/integration/test_deployed_chat.py tests/integration/test_deployed_state.py tests/integration/test_recovery.py tests/integration/test_api_contract.py -m deployed --require-external -q` | Missing — this task creates/extends | Pending |
+
+Initial HTTP/DTO/ownership tracer checks live in test_deployed_chat.py (01-02); the full independent API matrix is created in 01-06-02 before later privacy/final checks use it. Final 01-08 integrated assertions extend only test_deployed_chat.py and rerun existing recovery/browser suites without changing their ownership or mandatory checks.
 
 ## Wave 0 Requirements
 
@@ -69,7 +83,7 @@ Task bindings are provisional research groups. The planner must synchronize this
 
 ## Validation Sign-Off
 
-- [ ] Final plan/task/wave and threat bindings replace provisional groups.
+- [x] Final plan/task/wave and threat bindings replace provisional groups (planning-only synchronization, not execution evidence).
 - [ ] Every task has an automated check or explicit initial-test-infrastructure dependency.
 - [ ] All referenced test files are created before use, with meaningful collected cases.
 - [ ] Sampling continuity and bounded timeouts are specified without watch modes.
