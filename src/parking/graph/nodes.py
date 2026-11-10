@@ -43,7 +43,7 @@ class PolicyNodes:
             "blocked": False, "is_english": False, "candidate": "", "final_reply": "",
             "assessment": {}, "rewritten_question": None, "attempt": 1,
             "reservation_state": draft,
-            "reservation_id": None, "booking_error": None, "admin_decision": {},
+            "reservation_id": None, "booking_error": None, "admin_result": None,
             "reservation_summary": "",
             "messages": [HumanMessage(content=request.message, id=f"user:{request.request_id}")],
         }

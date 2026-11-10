@@ -2,8 +2,10 @@
 
 Local policy and reservation chat using LangChain, LangGraph, the Agent Server SDK,
 FastAPI, Chroma, and separate SQLite files. Compiled policy, reservation and admin
-subgraphs preserve conversation state. Reservations hold a slot as pending before
-an API-driven approval interrupt; only approval reaches the mock continuation.
+subgraphs preserve conversation state. The customer agent collects details,
+saves a pending SQLite reservation, then passes its ID and summary to the compiled
+admin subgraph. After API review, its LLM decision runs through a ToolNode that
+sets the same record to approved or rejected. The parent replies from admin_result.
 See [the admin approval API](docs/admin-approval.md) for request/resume details.
 
 Customer chat is English-only. The `check_language` node uses a strict structured

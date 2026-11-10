@@ -1,4 +1,4 @@
-"""Summarize and persist before the separate approval graph can interrupt."""
+"""Collect details, persist a pending hold, then summarize it for admin review."""
 
 import json
 
@@ -37,6 +37,7 @@ def build_reservation_graph(model_factory, store):
             "or claims that it is approved. Use English.",
             {"spot_id": state["booking_draft"]["spot_id"], "start": state["booking_draft"]["start"],
              "end": state["booking_draft"]["end"]})
+        store.set_summary(state["reservation_id"], summary.summary)
         return {"reservation_summary": summary.summary}
 
     def persist(state, config):
@@ -44,17 +45,18 @@ def build_reservation_graph(model_factory, store):
         if not thread_id:
             raise ValueError("Reservation requests require a persistent thread")
         try:
-            row = store.reserve(thread_id, state["request_id"], state["booking_draft"], state["reservation_summary"])
+            row = store.reserve(thread_id, state["request_id"], state["booking_draft"], "")
         except ValueError as error:
             return {"booking_error": str(error), "reservation_id": None}
-        return {"reservation_id": row["reservation_id"], "booking_error": None}
+        return {"reservation_id": row["reservation_id"], "booking_draft": json.loads(row["draft"]),
+                "booking_error": None}
 
     workflow = StateGraph(MainState, output_schema=ReservationOutput)
     workflow.add_node("extract", extract)
     workflow.add_node("summarize", summarize)
     workflow.add_node("persist_pending", persist)
     workflow.add_edge(START, "extract")
-    workflow.add_edge("extract", "summarize")
-    workflow.add_edge("summarize", "persist_pending")
-    workflow.add_edge("persist_pending", END)
+    workflow.add_edge("extract", "persist_pending")
+    workflow.add_conditional_edges("persist_pending", lambda s: "summarize" if s.get("reservation_id") else END)
+    workflow.add_edge("summarize", END)
     return workflow

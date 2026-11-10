@@ -69,7 +69,7 @@ class BookingModel(Model):
         return Structured()
 
 
-@pytest.mark.parametrize("decision,status", [("approve", "confirmed"), ("reject", "rejected")])
+@pytest.mark.parametrize("decision,status", [("approve", "approved"), ("reject", "rejected")])
 async def test_nested_pause_restart_resume_preserves_state(store, tmp_path, decision, status):
     model = BookingModel(decision)
     config = {"configurable": {"thread_id": "owned-thread"}}
@@ -83,6 +83,8 @@ async def test_nested_pause_restart_resume_preserves_state(store, tmp_path, deci
         state = (await graph.aget_state(config)).values
         reservation_id = state["reservation_id"]
         assert store.get(reservation_id)["status"] == "pending"
+        assert store.get(reservation_id)["summary"] == state["reservation_summary"]
+        assert state["booking_draft"] == json.loads(store.get(reservation_id)["draft"])
         assert model.calls["review"] == 0
         assert state["evidence"] == before["evidence"]
         assert len(state["messages"]) == 3
@@ -93,6 +95,9 @@ async def test_nested_pause_restart_resume_preserves_state(store, tmp_path, deci
         output = await graph.ainvoke(Command(resume={"reservation_id": reservation_id, "response": decision}), config)
         assert store.get(reservation_id)["status"] == status
         state = (await graph.aget_state(config)).values
+        assert state["admin_result"] == {"reservation_id": reservation_id, "status": status, "reason": None}
+        assert not {"admin_decision", "admin_response", "admin_messages"} & state.keys()
+        assert ("approved" if decision == "approve" else "rejected") in output["final_reply"]
         assert state["evidence"] == before["evidence"]
         assert set(state["queries"]) == {"policy_000000001", "booking_00000001"}
         assert len(state["messages"]) == 4
@@ -162,6 +167,89 @@ def test_legacy_overlap_and_adjacent_interval(store):
     row = store.reserve("thread", "request", {**DRAFT, "start": DRAFT["end"],
                        "end": "2026-11-20T11:00:00+01:00"}, "Intent")
     assert row["status"] == "pending"
+
+
+@pytest.mark.parametrize("change,reason", [("conflict", "slot_unavailable"), ("hours", "outside_hours")])
+async def test_admin_tool_revalidates_before_approval(store, change, reason):
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    model = BookingModel()
+    config = {"configurable": {"thread_id": "thread"}}
+    graph = build_graph(lambda: model, checkpointer=InMemorySaver(), booking_store=store)
+    await graph.ainvoke({"message": "Book my spot", "request_id": "booking_00000001"}, config)
+    reservation_id = (await graph.aget_state(config)).values["reservation_id"]
+    with sqlite3.connect(store.path) as db:
+        if change == "conflict":
+            db.execute("INSERT INTO reservations VALUES (?,?,?,'confirmed')",
+                       (DRAFT["spot_id"], DRAFT["start"], DRAFT["end"]))
+        else:
+            db.execute("UPDATE transport_slots SET working_hours='10:00-22:00'")
+    store.claim_review(reservation_id, "approve")
+    result = await graph.ainvoke(Command(resume={"reservation_id": reservation_id, "response": "approve"}), config)
+    state = (await graph.aget_state(config)).values
+    assert state["admin_result"] == {"reservation_id": reservation_id, "status": "rejected", "reason": reason}
+    assert "rejected" in result["final_reply"] and "Private" not in json.dumps(result)
+    assert store.decide(reservation_id, True)["status"] == "rejected"
+
+
+def test_approved_row_is_same_record_and_replay_safe(store):
+    row = store.reserve("thread", "request", DRAFT, "Intent")
+    approved = store.decide(row["reservation_id"], True)
+    assert approved == {**row, "status": "approved"}
+    assert store.decide(row["reservation_id"], True) == approved
+    with pytest.raises(ValueError, match="slot_unavailable"):
+        store.reserve("other-thread", "request", DRAFT, "Intent")
+    with pytest.raises(Conflict):
+        store.decide(row["reservation_id"], False)
+
+
+def test_migrate_confirmed_requests_preserves_identity_and_claims(store):
+    row = store.reserve("thread", "request", DRAFT, "Intent")
+    store.claim_review(row["reservation_id"], "approve")
+    store.review_dispatched(row["reservation_id"], "existing-run")
+    with sqlite3.connect(store.path) as db:
+        # Recreate the previous application's schema and one confirmed row.
+        schema = db.execute("SELECT sql FROM sqlite_master WHERE name='booking_requests'").fetchone()[0]
+        db.execute(schema.replace("booking_requests", "old_requests", 1).replace("'approved'", "'confirmed'"))
+        db.execute("INSERT INTO old_requests SELECT * FROM booking_requests")
+        db.execute("UPDATE old_requests SET status='confirmed'")
+        db.execute("DROP TABLE booking_requests")
+        db.execute("ALTER TABLE old_requests RENAME TO booking_requests")
+        db.execute("ALTER TABLE booking_requests DROP COLUMN decision_reason")
+    migrated = store.get(row["reservation_id"])
+    assert migrated["status"] == "approved"
+    assert migrated["draft"] == row["draft"] and migrated["summary"] == row["summary"]
+    assert migrated["review_text"] == "approve" and migrated["review_run_id"] == "existing-run"
+    assert store.get(row["reservation_id"]) == migrated
+    with pytest.raises(ValueError, match="slot_unavailable"):
+        store.reserve("another", "request", DRAFT, "Intent")
+
+
+async def test_summary_runs_after_pending_write_and_receives_no_pii(store):
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    model = BookingModel()
+
+    def factory():
+        class CheckedModel:
+            def with_structured_output(self, schema, **kwargs):
+                delegate = model.with_structured_output(schema, **kwargs)
+
+                class Structured:
+                    async def ainvoke(self, messages):
+                        if schema is ReservationSummary:
+                            assert len(store.pending()) == 1
+                            assert store.pending()[0]["status"] == "pending"
+                            assert "Private" not in messages[-1].content
+                        return await delegate.ainvoke(messages)
+
+                return Structured()
+        return CheckedModel()
+
+    graph = build_graph(factory, checkpointer=InMemorySaver(), booking_store=store)
+    output = await graph.ainvoke({"message": "Book my spot", "request_id": "booking_00000001"},
+                                {"configurable": {"thread_id": "thread"}})
+    assert output["__interrupt__"]
 
 
 @pytest.fixture

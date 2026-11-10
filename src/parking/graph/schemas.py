@@ -127,8 +127,7 @@ class MainState(TypedDict, total=False):
     reservation_id: str | None
     reservation_summary: str
     booking_error: str | None
-    admin_response: dict
-    admin_decision: dict
+    admin_result: dict | None
 
 
 class ReservationDraft(StrictModel):
@@ -153,6 +152,12 @@ class AdminDecision(StrictModel):
     response: Literal["approve", "reject"]
 
 
+class AdminResult(StrictModel):
+    reservation_id: str
+    status: Literal["approved", "rejected"]
+    reason: str | None = None
+
+
 class ReservationOutput(TypedDict):
     booking_draft: dict
     reservation_state: dict
@@ -162,7 +167,22 @@ class ReservationOutput(TypedDict):
 
 
 class AdminOutput(TypedDict):
+    admin_result: dict
+
+
+class AdminInput(TypedDict):
+    reservation_id: str
+    reservation_summary: str
+    booking_draft: dict
+
+
+class AdminState(AdminInput, total=False):
+    # Shared handoff keys have the same names/types as MainState. Tool history
+    # stays private to the compiled subgraph and cannot enter customer messages.
+    admin_response: dict
     admin_decision: dict
+    admin_messages: Annotated[list[AnyMessage], add_messages]
+    admin_result: dict
 
 
 class PolicyOutput(TypedDict):
