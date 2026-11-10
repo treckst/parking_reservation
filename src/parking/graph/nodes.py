@@ -52,6 +52,7 @@ class PolicyNodes:
             "reservation_state": draft,
             "reservation_id": None, "booking_error": None, "admin_result": None,
             "reservation_summary": "",
+            "space_choice": "none",
             "messages": [HumanMessage(content=request.message, id=f"user:{request.request_id}")],
         }
 
@@ -106,6 +107,9 @@ class PolicyNodes:
             "and set lookup_only=true for information-only availability, price and explanation "
             "requests; these must never submit a booking. Use lookup_only=false when the customer "
             "requests a reservation or supplies/chooses requested booking details. "
+            "A reply to an offered-space question, such as 'i would like the standard place', "
+            "or 'yes' to an offer to choose any matching space is reservation with "
+            "lookup_only=false, not a policy/type-information question. "
             "preserving the known location/date/duration. Details-only answers to an assistant's missing-information question belong "
             "to reservation. Use the saved draft and conversation to resolve follow-ups. A proposed "
             "reservation must collect missing information, never fall back to policy retrieval merely "
@@ -116,7 +120,9 @@ class PolicyNodes:
             "current text or unambiguous conversation context. Otherwise use all CTR/RIV/STA/AIR. "
             "Create a standalone retrieval question preserving original meaning and constraints.",
             {"message": state["message"], "safe_history": history,
-             "booking_draft": state.get("booking_draft", {}), "parking_search": state.get("parking_search", {})},
+             "booking_draft": state.get("booking_draft", {}), "parking_search": state.get("parking_search", {}),
+             "parking_options": state.get("parking_options", []),
+             "awaiting_space_selection": state.get("awaiting_space_selection")},
         )
         facilities = intent.facilities or ["CTR", "RIV", "STA", "AIR"]
         if intent.kind == "conversation" and state.get("parking_search", {}).get("facility"):

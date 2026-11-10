@@ -60,6 +60,14 @@ exclude overlaps with legacy bookings and pending/approved holds; the seed's
 
 Customers choose an offered space (including "the first one") rather than needing
 to know an internal ID. Only then does the assistant ask for missing names/plates.
+After an offered-space question, accepting a type ("I'd like the standard place")
+accepts any matching available space. A separate structured choice intent records
+that acceptance; SQL rechecks the location/date/type/interval and selects a matching
+label, which the next reply discloses before asking for missing personal details.
+The pending-question context survives checkpoint restarts. Type preferences while
+still entering visit details, price comparisons, ambiguous replies and explicit
+requests to wait do not authorize automatic selection. Unclear acceptance gets a
+focused confirmation question instead of repeating the same generic offer.
 Changing location clears an incompatible selected space and refreshes the scoped
 options. SQL evidence uses the same immutable per-query reducer as retrieved pages;
 customer identity columns never enter search results. Quotes do not hold a space,

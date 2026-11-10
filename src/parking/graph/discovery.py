@@ -6,6 +6,7 @@ from datetime import date, datetime
 from parking.graph.collection import draft_snapshot, missing_details_question, public_details
 from parking.graph.schemas import ParkingSearch
 from parking.graph.fields import SEARCH_FIELDS
+from parking.graph.selection import awaiting_space_selection
 
 
 FACILITIES = {"CTR": "City Centre", "RIV": "Riverside", "STA": "Station", "AIR": "Airport"}
@@ -39,6 +40,15 @@ class ParkingDiscovery:
             return {"parking_options": []}
         spots = await asyncio.to_thread(self.store.find_slots, **filters)
         draft = dict(state.get("booking_draft", {}))
+        errors = dict(state.get("field_errors", {}))
+        if (state.get("space_choice") == "accept_type" and awaiting_space_selection(state)
+                and not state.get("intent", {}).get("lookup_only") and filters["spot_type"]
+                and filters["start"] and filters["end"] and spots and not draft.get("spot_id")):
+            # A type acceptance authorizes any matching space, not a guessed
+            # label. Use freshly scoped/overlap-checked SQL results and state
+            # the concrete choice in the reply. This does not create a hold.
+            draft["spot_id"] = spots[0]["spot_id"]
+            errors.pop("spot_id", None)
         if draft.get("spot_id"):
             selected = await asyncio.to_thread(self.store.find_slots, **{**filters, "spot_id": draft["spot_id"]})
             if selected:
@@ -47,6 +57,7 @@ class ParkingDiscovery:
                 draft["spot_id"] = None
         return {"parking_options": spots,
                 "booking_draft": draft,
+                "field_errors": errors,
                 "parking_search": {key: filters[key] for key in SEARCH_FIELDS},
                 "reservation_state": public_details(draft_snapshot(draft)["draft"], [filters["facility"]], filters)}
 
@@ -95,7 +106,7 @@ def reservation_question(state):
     when = ", " + date.fromisoformat(search.slot_date).strftime("%d %b %Y") if search.slot_date else ""
     if draft.get("start") or draft.get("end"):
         when += " " + (draft["start"][11:16] if draft.get("start") else "?") + "–" + (draft["end"][11:16] if draft.get("end") else "?")
-    label = "available" if checked else "spaces"
+    label = "selected" if chosen else "available" if checked else "spaces"
     quote = f"{FACILITIES[search.facility]}{when} — {label}: " + "; ".join(entries) + "."
     if not checked:
         quote += " Availability needs exact times."
@@ -113,7 +124,18 @@ def reservation_question(state):
     elif "end" in missing:
         question = "What end time or duration?"
     elif "spot_id" in missing:
-        question = "Which space would you like?"
+        if state.get("space_choice") == "defer":
+            question = "Your type preference is saved. Tell me when you're ready to choose a space."
+        elif state.get("space_choice") == "clarify":
+            kind = search.spot_type or "matching"
+            question = f"Shall I choose any available {kind} space for you, or do you want a particular label?"
+        else:
+            question = "Which space would you like?"
     else:
-        question = missing_details_question(draft) if missing else "Would you like to submit this reservation for approval?"
+        if state.get("space_choice") == "defer":
+            question = "Your details are saved. Tell me when you're ready to continue."
+        elif state.get("space_choice") == "clarify" and chosen:
+            question = f"Do you want to keep {chosen[0]['spot_id']}, or choose a different space?"
+        else:
+            question = missing_details_question(draft) if missing else "Would you like to submit this reservation for approval?"
     return explanation + quote + " " + question

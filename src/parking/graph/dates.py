@@ -9,6 +9,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from parking.graph.collection import public_details
 from parking.graph.fields import apply_field_updates
 from parking.graph.schemas import ReservationExtraction
+from parking.graph.schemas import ReservationFieldUpdate
+from parking.graph.selection import awaiting_space_selection, last_assistant_message
 
 
 EXTRACTION_INSTRUCTION = (
@@ -25,6 +27,16 @@ EXTRACTION_INSTRUCTION = (
     "from a specific spot_id: 'standard spot' sets spot_type=standard, not a space label. "
     "For 'the first one' or 'cheapest', resolve the specific spot_id from the supplied previous "
     "parking_options. A location change alone must not select a new space. "
+    "Read last_assistant_message and awaiting_space_selection. If the assistant offered spaces "
+    "and asked which one, 'i would like the standard place', 'a standard one please', or an "
+    "equivalent acceptance sets space_choice=accept_type and spot_type=standard. This accepts "
+    "any matching offered type; the application chooses an available label, so do not invent "
+    "a specific ID. Likewise accept another clearly chosen offered type. A type specification "
+    "while still supplying dates/times is only a preference: space_choice=none. General price "
+    "questions/comparisons are not acceptance. Use defer for an explicit request not to choose "
+    "yet; clarify for an ambiguous reference to multiple choices. For 'yes' after an offer to "
+    "choose any matching space, use accept_type with the saved type. Never replay a previous "
+    "acceptance on a later unrelated turn. "
     "Normalize dates to YYYY-MM-DD and start/end to full ISO timestamps with valid "
     "Europe/Warsaw offsets, including daylight saving. Normalize duration_hours as a numeric "
     "string. Accept natural English, ordinals, 12-hour and 24-hour clocks in the same message. "
@@ -54,10 +66,27 @@ class ReservationExtractor:
             "message": state["message"], "reference_time": self.clock().isoformat(), "timezone": "Europe/Warsaw",
             "saved_draft": state.get("booking_draft", {}), "saved_search": state.get("parking_search", {}),
             "field_errors": state.get("field_errors", {}), "parking_options": state.get("parking_options", []),
+            "last_assistant_message": last_assistant_message(state),
+            "awaiting_space_selection": awaiting_space_selection(state),
             "conversation": [{"role": m.type, "text": m.content} for m in state.get("messages", [])],
         }))])
         patch = ReservationExtraction.model_validate(response)
+        waiting = awaiting_space_selection(state)
+        if patch.space_choice == "accept_type" and waiting and not any(update.field == "spot_type" for update in patch.updates):
+            kinds = {spot["type"] for spot in state.get("parking_options", [])}
+            kind = state.get("parking_search", {}).get("spot_type") or (next(iter(kinds)) if len(kinds) == 1 else None)
+            if kind:
+                patch.updates.append(ReservationFieldUpdate(field="spot_type", operation="set", value=kind))
+            else:
+                patch.space_choice = "clarify"
         result = apply_field_updates(state, patch.updates)
+        if (patch.space_choice == "none" and waiting and patch.updates
+                and all(update.field == "spot_type" for update in patch.updates)):
+            # A type-only update is not another request for an exact label.
+            # When acceptance is unclear, ask a focused question instead of
+            # replaying the identical offer and generic space-choice question.
+            patch.space_choice = "clarify"
+        result["space_choice"] = patch.space_choice
         search = result["parking_search"]
         result["reservation_state"] = public_details(result["booking_draft"],
             [search["facility"]] if search["facility"] else [], search)

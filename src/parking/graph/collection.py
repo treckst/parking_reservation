@@ -81,7 +81,8 @@ class ReservationCollector:
             if action == "submit" and not snapshot["ready"]:
                 action = "continue"
             if action == "submit" and (state.get("intent", {}).get("lookup_only") or
-                                       state.get("intent", {}).get("explain_spot_id")):
+                                       state.get("intent", {}).get("explain_spot_id") or
+                                       state.get("space_choice") in ("defer", "clarify")):
                 action = "ask"
             error = ("missing_details" if not snapshot["ready"] else "not_submitted")
             return Command(update={
@@ -153,6 +154,9 @@ class ReservationCollector:
             "PLN prices from a scoped database lookup. Help the customer choose a listed space; "
             "never demand an unexplained internal spot ID or invent a space. Save a space only "
             "when the customer selects it (including 'first one' or 'cheapest'). If the customer "
+            "accepts an offered type, SQL discovery may already have selected a matching space. "
+            "Preserve that selection and ask for missing personal details; do not re-ask which "
+            "space or clear it just because no literal ID appeared in the customer message. "
             "asks what a spot ID means, explain that it is a space label and keep the saved date "
             "and duration. Ask only for missing start time when the date/duration are known; "
             "do not invent an hour for 'evening'. Collect personal details after time and space "

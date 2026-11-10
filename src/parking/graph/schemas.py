@@ -139,6 +139,8 @@ class MainState(TypedDict, total=False):
     parking_options: list[dict]
     date_clarification: str | None
     field_errors: dict[str, str]
+    awaiting_space_selection: bool
+    space_choice: Literal["none", "accept_type", "defer", "clarify"]
 
 
 class ReservationDraft(StrictModel):
@@ -174,6 +176,7 @@ class ReservationExtraction(StrictModel):
     """Only touched fields appear; null never implicitly clears another field."""
 
     updates: list[ReservationFieldUpdate] = Field(default_factory=list, max_length=20)
+    space_choice: Literal["none", "accept_type", "defer", "clarify"] = "none"
 
 
 class DraftFieldUpdate(StrictModel):
@@ -231,6 +234,7 @@ class ReservationOutput(TypedDict):
     date_clarification: str | None
     evidence: Annotated[dict, merge_evidence]
     field_errors: dict[str, str]
+    space_choice: Literal["none", "accept_type", "defer", "clarify"]
 
 
 class AdminOutput(TypedDict):

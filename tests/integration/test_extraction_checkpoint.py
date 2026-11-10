@@ -19,6 +19,8 @@ class ExtractedModel(BookingModel):
         super().__init__(draft={})
         self.patch, self.action = patch, action
         self.inspections = []
+        self.space_choice = "none"
+        self.lookup_only = False
 
     def with_structured_output(self, schema, **kwargs):
         delegate = super().with_structured_output(schema, **kwargs)
@@ -28,9 +30,9 @@ class ExtractedModel(BookingModel):
             async def ainvoke(self, messages):
                 if schema is Intent:
                     return {"kind": "reservation", "language": "en", "facilities": ["AIR"],
-                            "retrieval_question": json.loads(messages[-1].content)["message"]}
+                            "retrieval_question": json.loads(messages[-1].content)["message"], "lookup_only": model.lookup_only}
                 if schema is ReservationExtraction:
-                    return {"updates": model.patch}
+                    return {"updates": model.patch, "space_choice": model.space_choice}
                 return await delegate.ainvoke(messages)
         return Structured()
 

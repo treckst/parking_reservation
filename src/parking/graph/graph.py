@@ -39,6 +39,7 @@ def build_graph(model_factory=create_llm, retriever=retrieve, *, checkpointer=No
         if state.get("booking_error"):
             if (draft_snapshot(state.get("booking_draft", {}))["missing_fields"] or
                     state.get("field_errors") or
+                    state.get("space_choice") in ("defer", "clarify") or
                     state.get("intent", {}).get("lookup_only") or state.get("intent", {}).get("explain_spot_id")):
                 text = reservation_question(state)
             elif state["booking_error"] == "not_submitted":
@@ -52,7 +53,12 @@ def build_graph(model_factory=create_llm, retriever=retrieve, *, checkpointer=No
             text = ("The administrator approved your reservation." if result.status == "approved" else
                     "Your reservation was rejected because it no longer meets the booking rules."
                     if result.reason else "The administrator rejected your reservation.")
-        return {"final_reply": text, "messages": [AIMessage(content=text, id=f"assistant:{state['request_id']}")]}
+        missing = draft_snapshot(state.get("booking_draft", {}))["missing_fields"]
+        waiting = bool(state.get("booking_error") and "spot_id" in missing
+            and "start" not in missing and "end" not in missing and state.get("parking_options")
+            and not any(field != "spot_id" for field in state.get("field_errors", {})))
+        return {"final_reply": text, "awaiting_space_selection": waiting,
+                "messages": [AIMessage(content=text, id=f"assistant:{state['request_id']}")]}
 
     workflow.add_node("booking_reply", booking_reply)
     workflow.add_edge(START, "prepare")
