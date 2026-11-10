@@ -1,122 +1,174 @@
 # Parking Reservation Assistant
 
-A local English-language parking chat built with LangChain, LangGraph, FastAPI,
-SQLite and Chroma. The REST API serves the UI and submits requests to the graph
-server through `langgraph_sdk`.
+A local chat application for finding parking, checking prices and rules, and
+requesting a reservation. It combines a LangGraph agent, a FastAPI-backed web
+UI, a SQLite booking database, and parking documents stored in Chroma.
 
-## How it works
+The assistant supports four fictional locations: **City Centre**, **Riverside**,
+**Station**, and **Airport**. Conversations are in English. The supplied parking
+fixtures cover **November 2026**.
 
-- The assistant offers spaces and prices for City Centre (`CTR`), Riverside
-  (`RIV`), Station (`STA`) and Airport (`AIR`). SQL searches always filter by
-  location, and by date and space type when supplied. Exact times are required
-  to check interval availability; the fixture availability flag is a snapshot.
-- Reservation details are extracted into a separate structured schema before
-  SQL or collection. Natural-language dates become Europe/Warsaw timestamps.
-  Each field is saved independently across turns; missing or ambiguous fields
-  produce follow-up questions. Required fields are space, start/end, first name,
-  surname and vehicle plate.
-- A complete request creates a pending hold in `booking_requests`. The compiled
-  admin subgraph receives the saved draft and summary through shared state keys
-  and automatically approves or rejects it. Its ToolNode rechecks SQL rules and
-  atomically inserts a `confirmed` reservation and marks the request `approved`,
-  or marks the request `rejected`. The parent replies from the persisted result.
-- Parking rules use existing Chroma pages with BM25/dense retrieval weighted
-  0.4/0.6 and source/page citations. One semantic rewrite is attempted when the
-  initial evidence is insufficient. Conversation history and earlier retrieval
-  evidence remain checkpointed; availability is refreshed for each search/write.
-- Customer output excludes private draft fields and other customers' records.
-  Admin decisions run entirely inside the parent graph, without admin HTTP
-  endpoints or human approval. Cancellation is not implemented.
+## What it does
 
-See [the admin subgraph](docs/admin-approval.md) for its handoff and transaction
-contract. The application uses `ChatOpenAI(model="gpt-6-luna")` and
-`OpenAIEmbeddings(check_embedding_ctx_length=False)`.
+- Finds spaces and prices for a location, date, space type, and visit interval.
+- Collects booking details across turns and asks for missing information.
+- Converts natural-language dates and times into structured reservation fields.
+- Creates a pending hold and automatically reviews it before confirmation.
+- Answers parking-policy questions using retrieved documents and citations.
+- Keeps customer details out of public availability results and chat responses.
 
-## Setup and start
+## Architecture
 
-Requirements: Python 3.12, uv, Docker Desktop/Compose, and an existing local
-`.env` with these credentials:
+```mermaid
+flowchart LR
+    User["Customer"] --> UI["Browser chat UI"]
+    UI --> API["FastAPI<br/>REST and static files"]
+    API -->|"LangGraph SDK"| Graph["LangGraph server<br/>Parent graph"]
+    API --> Registry[("SQLite<br/>UI submission registry")]
+    Graph --> Bookings[("SQLite<br/>Spaces and bookings")]
+    Graph --> Chroma[("Chroma<br/>Parking documents")]
+    Graph --> Checkpoints[("SQLite<br/>Conversation checkpoints")]
+    Graph -.->|Runtime metadata| Postgres[("PostgreSQL")]
+    Graph -.->|Runtime queue| Redis[("Redis")]
+```
 
-| Variable | Purpose |
+The API serves the UI and forwards chat requests to the graph server. The parent
+LangGraph coordinates three **compiled subgraphs**. They share the relevant
+state keys; the admin agent is part of the graph and runs automatically.
+
+```mermaid
+flowchart TD
+    Message["Customer message"]
+    subgraph Parent["Parent graph"]
+        Checks["Prepare state<br/>English and input checks"]
+        Checks -->|"Allowed"| Route{"Classify intent"}
+        Checks -->|"Rejected"| Safe["Safe reply"]
+        Route -->|"Parking rules"| Policy["Policy subgraph"]
+        Route -->|"Reservation or availability"| Reservation["Reservation subgraph"]
+        Route -->|"Help or unsupported request"| Safe
+        Reservation --> Pending{"Pending request saved?"}
+        Pending -->|"Yes"| Admin["Admin subgraph"]
+    end
+    Message --> Checks
+    Policy --> Answer["Customer reply"]
+    Pending -->|"No"| Answer
+    Admin --> Answer
+    Safe --> Answer
+```
+
+| Subgraph | Responsibility |
 | --- | --- |
-| `OPENAI_API_KEY` | Chat and query embeddings |
-| `LANGSMITH_API_KEY` | Agent Server authentication with the required account access |
-| `LANGGRAPH_CLOUD_LICENSE_KEY` | Alternative Agent Server license, when applicable |
-| `LANGSMITH_TRACING` | Optional tracing switch; Compose defaults to `true` |
+| **Policy** | Retrieves relevant Chroma pages using BM25 (0.4) and vector search (0.6), assesses the evidence, and composes a cited answer. If the evidence is insufficient, it may rewrite the question and retrieve once more. |
+| **Reservation** | Extracts each supplied field into a structured draft, looks up spaces and prices in SQLite, and uses a tool loop to inspect the draft and ask for missing details. A complete submitted draft becomes a pending hold and a summary. |
+| **Admin** | Checks the shared draft and summary against the saved request, makes a structured approve/reject decision, and calls a fixed persistence tool. It returns `admin_result` to the parent for the final reply. |
 
-The graph needs access to LangSmith authentication even when tracing is disabled.
-A DNS failure, authentication timeout or invalid credential can prevent startup.
-Credentials are injected at runtime and must stay out of source and image builds.
+The parent currently chooses one route per message. A message combining an
+availability request with a separate rules question may need a follow-up to
+address both parts.
 
-Run from the repository root:
+### Reservation flow
+
+1. The customer supplies a location and visit details. Searches are scoped to the
+   location and, when provided, the date and space type. Exact start and end times
+   are needed to check interval availability.
+2. The assistant offers spaces and prices, saves the customer's selection, and
+   asks for any missing first name, surname, vehicle plate, or visit times. Dates
+   are normalized to the **Europe/Warsaw** time zone.
+3. A complete request is written to `booking_requests` as `pending`. The hold
+   prevents overlapping requests for the same space and interval.
+4. The admin subgraph reviews the saved request. On approval, it rechecks slot
+   rules and overlaps and writes a `confirmed` row to `reservations` in the same
+   transaction that marks the request `approved`. Rejection marks the request
+   `rejected` and creates no confirmed reservation.
+5. The parent returns the persisted decision. Conversation checkpoints retain
+   the draft and earlier query evidence across turns.
+
+Availability uses reservation intervals, not the fixture's snapshot flag.
+Cancellation is not implemented.
+
+## Technology
+
+| Area | Used here |
+| --- | --- |
+| Agent orchestration | LangChain and LangGraph |
+| Chat model | `gpt-6-luna` via `ChatOpenAI` |
+| Document retrieval | Chroma, OpenAI embeddings, and BM25/vector search |
+| Web application | FastAPI, LangGraph SDK, HTML, CSS, and JavaScript |
+| Persistence | SQLite for bookings, checkpoints, and the UI registry; PostgreSQL and Redis for the graph server runtime |
+| Deployment | Docker Compose |
+
+## Getting started
+
+### Requirements
+
+- Python 3.12, [uv](https://docs.astral.sh/uv/), and Docker Compose.
+- An `OPENAI_API_KEY` for the chat model and query embeddings.
+- A `LANGSMITH_API_KEY` with the required Agent Server access, or an applicable
+  `LANGGRAPH_CLOUD_LICENSE_KEY`. The graph server needs access to LangSmith
+  authentication even if tracing is disabled.
+- A root `.env` file containing the credentials. Keep credentials out of Git.
+
+From the repository root:
 
 ```powershell
 uv sync --dev
-# Run only if the fixture database is missing:
+
+# Run only if the booking fixture database is missing.
 uv run python ingested_mock_data/seed_database.py
 
+# Build the graph first; the API image uses it as its base.
 $env:PYTHONUTF8="1"
 uv run langgraph build -t parking-graph:phase01
 docker compose --env-file .env -f docker/compose.yaml up -d --build --wait
 ```
 
-Build the graph image first; the API image derives from it. After changing source,
-repeat both build/start commands. To restart existing containers without rebuilding:
+Open **http://127.0.0.1:8080**. The graph server is available locally at port
+`8123`, and Chroma at port `8000`. Compose starts the API after the graph passes
+its health check.
 
-```powershell
-docker compose --env-file .env -f docker/compose.yaml restart
-docker compose --env-file .env -f docker/compose.yaml ps
-```
+The application reuses the `parking_documents` Chroma collection. If the
+collection has not been ingested, start the Chroma service and follow the
+[fixture and ingestion guide](ingested_mock_data/README.md). Ingestion calls the
+embedding API; normal startup does not re-embed the PDFs. Restart the graph after
+updating the corpus to refresh the cached keyword index.
 
-Open **http://127.0.0.1:8080**. The graph server is at
-`http://127.0.0.1:8123`, and Chroma at `http://127.0.0.1:8000`.
-Compose waits for Chroma, PostgreSQL and Redis before starting the graph, then
-waits for graph health before starting the API. This is a trusted local demo
-without customer login; the published ports bind to loopback.
-
-Startup reuses the existing `parking_documents` collection. It does not ingest
-or re-embed PDFs. For a missing collection or deliberate corpus update, follow
-[the fixture/ingestion instructions](ingested_mock_data/README.md), then restart
-the graph to refresh cached keyword indexes. Preserve the existing Docker volumes.
-
-## UI API
-
-| Method | Route | Purpose |
-| --- | --- | --- |
-| POST | `/api/threads` | Create a browser-owned conversation |
-| POST | `/api/chat` | Submit `thread_id`, `request_id` and `message` |
-| GET | `/api/threads/{thread_id}/requests/{request_id}` | Poll a request |
-| GET | `/api/threads/{thread_id}/conversation` | Restore conversation messages |
-| GET | `/health` | API process health |
-
-Replies expose `pending`, `completed` or `failed` plus a safe graph output when
-complete. The gateway preserves request IDs and reconciles lost acknowledgements
-without blindly starting duplicate graph runs. It reads graph state only after a
-successful run and never returns raw checkpoints.
+This is a trusted local demo without customer or administrator login. Published
+service ports bind to loopback.
 
 ## Storage
 
-| Data | Host location |
+| Data | Location |
 | --- | --- |
-| Daily spaces, requests and confirmed reservations | `ingested_mock_data/parking_november_2026.sqlite3` |
-| Conversation checkpoints | `.runtime/graph/checkpoints.sqlite3` |
-| Browser/thread ownership and submission ledger | `.runtime/application.sqlite3` |
-| Agent Server scheduling and metadata | Compose PostgreSQL volume |
-| Retrieved page collection | Compose Chroma volume |
+| Spaces, booking requests, and confirmed reservations | `ingested_mock_data/parking_november_2026.sqlite3` |
+| Graph conversation checkpoints | `.runtime/graph/checkpoints.sqlite3` |
+| UI ownership and submission ledger | `.runtime/application.sqlite3` |
+| Graph server scheduling and metadata | Compose PostgreSQL volume |
+| Parking document collection | Compose Chroma volume |
 
-The fixture covers November 2026. The booking schema migration preserves existing
-reservations while removing the seed's November 1-10-only reservation constraint.
-Pending holds and confirmed bookings both prevent interval overlaps.
+The SQLite fixture contains daily space records for November 2026. The booking
+migration preserves existing reservation rows while removing the original
+November 1-10 date restriction. PostgreSQL, Redis, Chroma, and the application
+services are defined in [`docker/compose.yaml`](docker/compose.yaml).
 
-Run one graph server against the custom SQLite checkpoint file. The UI uses
-session storage and Web Locks for tab continuity. Refresh reconnects to the saved
-thread; New chat creates another thread. Browser session restoration can retain
-an old conversation after reopening the browser.
+## Project layout
+
+```text
+src/parking/
+  graph/          Parent graph, subgraphs, state, and tools
+  api/            REST endpoints, SDK gateway, and UI request tracking
+  web/            Browser chat UI
+  bookings.py     SQLite availability and transactional booking writes
+  retrieval.py    Chroma and BM25/vector document retrieval
+  checkpoint.py   SQLite checkpoint adapter
+ingested_mock_data/  Fixture scripts and policy PDFs
+docker/             Compose configuration and API Dockerfile
+tests/              Unit and integration tests
+```
 
 ## Tests
 
-Offline tests use temporary storage and mock provider calls. Disable tracing for
-the test process to avoid waiting on external trace uploads:
+Offline tests use temporary storage and mock provider calls. To avoid external
+trace uploads during the test run:
 
 ```powershell
 $env:LANGSMITH_TRACING="false"
@@ -125,7 +177,5 @@ uv run pytest -q
 node --test tests/web/chat.test.mjs
 ```
 
-External Chroma/deployed tests are opt-in and skip when their prerequisites are
-absent. Their setup is described in `tests/integration/test_chroma_retrieval.py`
-and `tests/integration/test_deployed_chat.py`. Run deployed tests only against a
-disposable test deployment.
+The external Chroma and deployed-service tests are opt-in; their prerequisites
+are documented in the corresponding files under `tests/integration/`.
