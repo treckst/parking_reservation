@@ -4,10 +4,10 @@ current_phase: 01
 current_phase_name: Persistent Grounded Policy Chat
 status: Phase 1 implementation recorded; verification skipped by explicit user request
 stopped_at: Plans 01-02 through 01-08 implemented with acceptance evidence unverified
-last_updated: "2026-11-10T19:05:15Z"
+last_updated: "2026-11-10T19:23:26.578Z"
 last_activity: 2026-11-10
-last_activity_desc: Admin API and legacy recovery removed; 171 tests pass, 3 skipped; requested booking rows deleted; UI online, graph startup blocked by LangSmith connectivity.
-state_head: 4a559141cf97aeeb98f3845b61087951a27d995c
+last_activity_desc: README refreshed and UI gateway simplified; 15 targeted tests pass; fresh canonical graph/API images deployed and all five Compose services healthy.
+state_head: 4525aec9ae95bcf07b33733b85feca9d648eb89c
 progress:
   total_phases: 4
   completed_phases: 0
@@ -36,7 +36,7 @@ Phase: 01 (Persistent Grounded Policy Chat) — IMPLEMENTED / UNVERIFIED
 Plan: 8 of 8 implementation summaries recorded; new acceptance checks unverified
 Status: Phase 1 implementation recorded; verification skipped by explicit user request
 Roadmap: APPROVED by the user on 2026-11-10
-Last activity: 2026-11-10 - Removed obsolete admin API, dispatch storage and recovery tests; 171 tests passed, 3 skipped. Cleared booking_requests and the specified reservation. Images rebuilt; UI online; graph startup blocked by external LangSmith authentication connectivity.
+Last activity: 2026-11-10 - Completed quick task 261110-rzu: README and gateway cleanup; 15 targeted tests passed. Fresh LangGraph CLI build and API rebuild deployed; all five services healthy; image identity and HTTP health verified. Database remains 0 requests and 720 reservations.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -125,3 +125,4 @@ Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md
 | 261110-op1 | Mandatory structured per-field extraction before SQL, inspection and pending writes | 2026-11-10 | cacf25c | complete | [261110-op1-independent-structured-booking-field-upd](./quick/261110-op1-independent-structured-booking-field-upd/) |
 | 261110-qec | Ensure booking state asks for name, surname, and car number, and transactionally writes confirmed reservations on approval | 2026-11-10 | 5a1fc17 | — | [261110-qec-ensure-booking-state-asks-for-name-surna](./quick/261110-qec-ensure-booking-state-asks-for-name-surna/) |
 | 9 | Remove obsolete admin API/recovery code and tests; clear booking_requests and the specified confirmed reservation | 2026-11-10 | 4a55914 | — | — |
+| 261110-rzu | Update README, simplify UI gateway, build a fresh graph image and recreate healthy Docker Compose services | 2026-11-10 | 4525aec | — | [261110-rzu-update-readme-remove-redundant-api-gatew](./quick/261110-rzu-update-readme-remove-redundant-api-gatew/) |
