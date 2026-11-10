@@ -1,6 +1,6 @@
 """Validated model boundaries and persisted conversation channels."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal, TypedDict
 from zoneinfo import ZoneInfo
 
@@ -130,6 +130,9 @@ class MainState(TypedDict, total=False):
     reservation_summary: str
     booking_error: str | None
     admin_result: dict | None
+    parking_search: dict
+    parking_options: list[dict]
+    date_clarification: str | None
 
 
 class ReservationDraft(StrictModel):
@@ -159,8 +162,21 @@ class ReservationDates(StrictModel):
 
     start: str | None = None
     end: str | None = None
-    provided_fields: list[Literal["start", "end"]] = Field(default_factory=list)
+    slot_date: str | None = None
+    duration_hours: float | None = Field(default=None, gt=0, le=24)
+    provided_fields: list[Literal["start", "end", "slot_date", "duration_hours"]] = Field(default_factory=list)
     clarification: str | None = None
+
+
+class ParkingSearch(StrictModel):
+    facility: Literal["CTR", "RIV", "STA", "AIR"] | None = None
+    slot_date: str | None = None
+    duration_hours: float | None = Field(default=None, gt=0, le=24)
+
+    @field_validator("slot_date")
+    @classmethod
+    def normalized_date(cls, value):
+        return date.fromisoformat(value).isoformat() if value is not None else None
 
 
 class ReservationState(MainState, total=False):
@@ -195,6 +211,10 @@ class ReservationOutput(TypedDict):
     reservation_id: str | None
     reservation_summary: str
     booking_error: str | None
+    parking_search: dict
+    parking_options: list[dict]
+    date_clarification: str | None
+    evidence: Annotated[dict, merge_evidence]
 
 
 class AdminOutput(TypedDict):

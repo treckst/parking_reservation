@@ -82,3 +82,28 @@ def test_invalid_interval_is_incomplete_before_submission(end):
         "start": "2026-11-13T14:00:00+01:00", "end": end})
     assert not snapshot["ready"]
     assert set(snapshot["missing_fields"]) == {"start", "end"}
+
+
+async def test_date_duration_survive_vague_evening_then_start_time_completes_interval():
+    model = DateModel({"slot_date": "2026-11-20", "duration_hours": 6,
+        "start": None, "end": None, "provided_fields": ["slot_date", "duration_hours", "start", "end"],
+        "clarification": "What time in the evening would you like to start?"})
+    first = await DateNormalizer(lambda: model).normalize({
+        "message": "6 hours in the evening on November 20 2026 at city centre",
+        "intent": {"facilities": ["CTR"]}})
+    assert first["parking_search"] == {"facility": "CTR", "slot_date": "2026-11-20", "duration_hours": 6}
+    assert not first["booking_draft"].get("start")
+    model.result = {"start": "2026-11-20T16:00:00+01:00", "provided_fields": ["start"]}
+    second = await DateNormalizer(lambda: model).normalize({**first, "message": "4pm"})
+    assert model.payload["saved_search"] == first["parking_search"]
+    assert second["booking_draft"]["end"] == "2026-11-20T22:00:00+01:00"
+    assert second["parking_search"] == first["parking_search"]
+
+
+async def test_location_change_clears_old_spot_but_preserves_date_duration():
+    model = DateModel({"provided_fields": []})
+    result = await DateNormalizer(lambda: model).normalize({"message": "Airport instead",
+        "intent": {"facilities": ["AIR"]}, "booking_draft": {"spot_id": "CTR-001"},
+        "parking_search": {"facility": "CTR", "slot_date": "2026-11-20", "duration_hours": 6}})
+    assert result["parking_search"] == {"facility": "AIR", "slot_date": "2026-11-20", "duration_hours": 6}
+    assert result["booking_draft"]["spot_id"] is None
