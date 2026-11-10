@@ -4,10 +4,10 @@ current_phase: 01
 current_phase_name: Persistent Grounded Policy Chat
 status: Phase 1 implementation recorded; verification skipped by explicit user request
 stopped_at: Plans 01-02 through 01-08 implemented with acceptance evidence unverified
-last_updated: "2026-11-10T11:09:30Z"
+last_updated: "2026-11-10T11:34:00Z"
 last_activity: 2026-11-10
-last_activity_desc: Implemented policy graph, owned SDK API, durable recovery, browser chat and test artifacts; no new verification under --skip-gates --no-verify.
-state_head: aa7b4f2
+last_activity_desc: Completed hybrid BM25/vector ensemble, environment-based graph tracing and Dockerized API/UI; 13 focused pytest and 3 JS tests pass; all five services healthy.
+state_head: ba7f5e5
 progress:
   total_phases: 4
   completed_phases: 0
@@ -25,9 +25,10 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 **Core value:** Customers can request a valid parking reservation through conversation, with accurate availability, no overlapping bookings, administrator approval, and no disclosure of other customers' personal details.
 **Current focus:** Phase 1 implementation is recorded in eight summaries. Verification was explicitly skipped; phase acceptance and requirements remain pending. Deployment results are in 01-EXECUTION.md.
 
-Local API is running at http://127.0.0.1:8080. The graph image built and Compose
-reported Chroma/PostgreSQL/Redis/graph healthy. No customer request or acceptance
-suite was executed in this invocation.
+Containerized API/UI is running at http://127.0.0.1:8080, after graph health.
+All five Compose services are healthy. The hybrid/container quick task passed
+13 focused Python tests, 3 JS controller tests and HTTP/UI/SDK thread smoke
+checks. Full Phase 1 model/browser acceptance remains unverified.
 
 ## Current Position
 
@@ -95,3 +96,9 @@ None yet.
 Last session: 2026-11-10T10:15:12.947Z
 Stopped at: Phase 1 implementation recorded; verification skipped by explicit user request
 Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md
+
+## Quick Tasks Completed
+
+| ID | Description | Date | Commit | Directory |
+|----|-------------|------|--------|-----------|
+| 261110-h7o | BM25/vector 0.4/0.6 ensemble, environment-based LangSmith tracing, containerized API and UI after graph health | 2026-11-10 | ba7f5e5 | .planning/quick/261110-h7o-hybrid-retrieval-tracing-and-containeriz |
