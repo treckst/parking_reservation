@@ -61,6 +61,16 @@ Live SQL availability/grid belongs to Phase 2; conversational booking writes bel
 
 </decisions>
 
+## User Override: Phase 1 Provider Setup (2026-11-10)
+
+The user removed the embedding provenance and live OpenAI authentication prerequisites. This decision supersedes conflicting earlier research, plans, validation instructions, and the original halted prerequisite report.
+
+- Create embeddings using exactly `embeddings = OpenAIEmbeddings(check_embedding_ctx_length=False)`.
+- Create the LLM using exactly `llm = ChatOpenAI(model="gpt-6-luna")`.
+- Do not require embedding model/provenance environment variables, a provenance file, vector comparison, or a live provider authentication/structured-output probe as Phase 1 gates.
+- Mock OpenAI constructors and calls in unit tests. Automated provider checks must run without API keys or live OpenAI requests.
+- The provider prerequisite gate is resolved by this explicit scope change; the separate SqliteSaver implementation/conformance task is still pending.
+
 <canonical_refs>
 ## Canonical References
 

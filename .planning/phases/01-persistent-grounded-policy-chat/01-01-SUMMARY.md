@@ -4,6 +4,7 @@ plan: "01"
 subsystem: infra
 tags: [langgraph, sqlite, pytest, prerequisites]
 status: halted
+halt_reason: "Original gate resolved by user override; plan remains unfinished because SqliteSaver task 2 has not run. Resume that task explicitly."
 requires: []
 provides:
   - Locked Python runtime and read-only prerequisite probes
@@ -33,7 +34,17 @@ coverage:
     human_judgment: false
 ---
 
-# Phase 1 Plan 01: Runtime prerequisites halted
+# Phase 1 Plan 01: Provider prerequisite gate resolved
+
+## Current Resolution (2026-11-10)
+
+The user explicitly removed live OpenAI authentication and embedding provenance prerequisites. The original stop below is historical and must not be enforced. The provider gate is **RESOLVED**; task 01-01-01 now passes 22 offline tests (18 dependency/import checks and 4 mocked provider/network-isolation tests).
+
+`src/parking/models.py` uses exactly `embeddings = OpenAIEmbeddings(check_embedding_ctx_length=False)` and `llm = ChatOpenAI(model="gpt-6-luna")`. Both removed embedding environment variables and the live probes are gone. Unit tests mock constructors/calls, remove the provider key, and block socket connections. `uv run --locked pytest -q` passed: **22 passed in 4.24s**. A sandbox-only DLL access failure in the initial run was resolved by rerunning with the required execution permission; no live provider request was made.
+
+Task 01-01-02 (separate SQLite SqliteSaver implementation/conformance) remains pending. Zero plans are complete. The retained `halted` artifact status prevents dependent plans from treating the unfinished saver as complete; it does not reinstate the removed provider gate. On continuation, resume task 2 of this plan and replace this partial report with a complete summary after conformance passes.
+
+## Historical Attempt Before User Override
 
 **Dependencies resolve and 18 local checks pass; invalidated provider credentials and missing embedding provenance block the leading tracer.**
 

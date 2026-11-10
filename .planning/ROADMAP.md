@@ -30,9 +30,9 @@ Deliver the approved 49-requirement local demo as four Vertical MVP slices: pers
   3. A customer can continue the same session-bound thread after later questions and a graph-server restart without losing messages or earlier query evidence; concurrent submissions to that thread are controlled without mixing replies or query identities.
   4. Attempts to expose hidden instructions, another session's conversation, sensitive records, or internal graph state cannot produce an unauthorized customer reply or tool action; the final reply passes the output guardrail.
   5. A local operator can build and start the policy-chat slice with persistent graph infrastructure, observe Chroma/PostgreSQL/Redis readiness before graph startup, and exercise the actual Agent Server and SDK transport using documented configuration.
-**Plans:** 0/8 plans complete; 01-01 halted at the prerequisite gate
+**Plans:** 0/8 plans complete; 01-01 provider prerequisite resolved, SqliteSaver task pending
 **Wave 1**
-- [ ] 01-01-PLAN.md (halted: provider credentials and embedding provenance)
+- [ ] 01-01-PLAN.md (task 1 resolved; task 2 pending)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-02-PLAN.md
@@ -142,7 +142,7 @@ Keep the approved scope: local trusted demo, LangChain/LangGraph only, the confi
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Persistent Grounded Policy Chat | 0/8 | Halted at prerequisite gate | - |
+| 1. Persistent Grounded Policy Chat | 0/8 | Ready to continue | - |
 | 2. Live Availability and Slot Grid | 0/TBD | Not started | - |
 | 3. Conversational Pending Reservations | 0/TBD | Not started | - |
 | 4. Administrator Decisions and Cancellation | 0/TBD | Not started | - |
