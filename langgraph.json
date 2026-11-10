@@ -3,6 +3,6 @@
   "api_version": "0.17.1",
   "dependencies": ["."],
   "graphs": {"parking": "parking.graph.graph:graph"},
-  "checkpointer": {"path": "parking.checkpoint:generate_checkpointer"},
+  "checkpointer": {"path": "parking.checkpoint.generate_checkpointer"},
   "env": ".env"
 }
