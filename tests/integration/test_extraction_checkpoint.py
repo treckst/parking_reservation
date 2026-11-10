@@ -102,9 +102,10 @@ async def test_unresolved_field_blocks_pending_until_corrected(store, tmp_path):
         assert not model.inspections[-1]["ready"] and not store.pending()
         assert "space type" in result["final_reply"]
         model.patch = updates({"spot_type": "standard"})
-        paused = await graph.ainvoke({"message": "standard, please submit", "request_id": "readiness_0000002"}, config)
-        assert paused["__interrupt__"]
+        result = await graph.ainvoke({"message": "standard, please submit", "request_id": "readiness_0000002"}, config)
+        assert "__interrupt__" not in result and "approved" in result["final_reply"]
         state = (await graph.aget_state(config)).values
         assert not state["field_errors"] and state["parking_search"]["spot_type"] == "standard"
-        assert store.reserve.call_count == 1 and len(store.pending()) == 1
+        assert store.reserve.call_count == 1 and not store.pending()
+        assert state["admin_result"]["status"] == "approved"
         assert state["booking_draft"]["car_number"] == "DEMO123"

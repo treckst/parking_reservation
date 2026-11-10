@@ -34,13 +34,13 @@ async def test_partial_collection_restart_correction_and_submit(store, tmp_path)
         graph = build_graph(lambda: BookingModel(draft=patch), checkpointer=saver, booking_store=store)
         result = await graph.ainvoke({"message": "Book with the remaining details and corrected first name",
                                      "request_id": "collection_00002"}, config)
-        assert result["__interrupt__"]
+        assert "__interrupt__" not in result and "approved" in result["final_reply"]
         state = (await graph.aget_state(config)).values
         saved = json.loads(store.get(state["reservation_id"])["draft"])
         assert saved["name"] == "CorrectedName"
         assert saved["surname"] == DRAFT["surname"] and saved["spot_id"] == DRAFT["spot_id"]
         assert saved["car_number"] == DRAFT["car_number"]
-        assert len(state["messages"]) == 3
+        assert len(state["messages"]) == 4
 
 
 class ScriptedModel(BookingModel):

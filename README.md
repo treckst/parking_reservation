@@ -5,10 +5,10 @@ FastAPI, Chroma, and separate SQLite files. Compiled policy, reservation and adm
 subgraphs preserve conversation state. The customer agent uses a bound-tool loop
 to inspect/update its draft and ask for missing fields across turns. It collects details,
 saves a pending SQLite reservation, then passes its ID and summary to the compiled
-admin subgraph. After API review, its LLM decision runs through a ToolNode that
+admin subgraph. Its automatic structured LLM review runs through a ToolNode that
 transactionally marks the request approved and inserts a confirmed row into
 `reservations`; rejection leaves no confirmed row. The parent replies from admin_result.
-See [the admin approval API](docs/admin-approval.md) for request/resume details.
+See [automatic admin review](docs/admin-approval.md) for handoff and recovery details.
 
 The assistant offers reservation help and parking information. Greetings and
 general questions such as "can you help?" use a conversational route, with no

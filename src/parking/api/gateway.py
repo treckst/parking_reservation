@@ -66,7 +66,11 @@ class Gateway:
                 state = await asyncio.wait_for(self.client.threads.get_state(thread_id), timeout=20)
                 values = state.get("values", {})
                 if "admin" in state.get("next", []) and values.get("reservation_id"):
-                    booking = await self.admin.reconcile(self.admin.store.get(values["reservation_id"]))
+                    booking = self.admin.store.get(values["reservation_id"])
+                    if (booking["thread_id"] != thread_id or booking["request_id"] != request_id
+                            or values.get("request_id") != request_id):
+                        raise ValueError("Mismatched pending reservation")
+                    booking = await self.admin.reconcile(booking, state)
                     if booking["review_run_id"] and booking["review_run_id"] != row["run_id"]:
                         return await self.status(owner, thread_id, request_id)
                     return self.project(row)

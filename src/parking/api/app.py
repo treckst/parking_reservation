@@ -35,11 +35,6 @@ class ChatReply(BaseModel):
     retryable: bool
 
 
-class ReviewRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    response: str = Field(min_length=1, max_length=2000, pattern=r"\S")
-
-
 def create_app(settings=None, client=None):
     settings = settings or Settings.from_env()
     registry = Registry(settings.application_path)
@@ -149,8 +144,8 @@ def create_app(settings=None, client=None):
     async def pending_reservations():
         return {"reservations": gateway.admin.store.pending()}
 
-    @app.post("/api/admin/reservations/{reservation_id}/review", status_code=202)
-    async def review_reservation(reservation_id: Handle, body: ReviewRequest):
-        return await gateway.admin.review(reservation_id, body.response)
+    @app.post("/api/admin/reservations/{reservation_id}/resume", status_code=202)
+    async def resume_reservation(reservation_id: Handle):
+        return await gateway.admin.resume(reservation_id)
 
     return app
