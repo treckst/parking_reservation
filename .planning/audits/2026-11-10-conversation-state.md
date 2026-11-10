@@ -25,3 +25,24 @@ retaining Agent Server's agent address and runtime credential. Synthetic env_fil
 tests exercise the actual installed SDK resolver from root and docker/.
 Full regression gate: 111 passed, 3 skipped (opt-in deployed checks), with one
 existing langchain-community deprecation warning. No fixture/Chroma reseeding.
+
+## Deployed verification
+
+Rebuilt parking-graph:phase01 and the API image; Compose reports all five services
+healthy. Existing volumes and checkpoint files were retained.
+
+Live configured-model check used explicitly fictional Sample Customer / DEMO123
+values in a fresh thread. A request with the reported English interval saved
+2026-11-13T14:00:00+01:00 through 2026-11-13T21:00:00+01:00 and asked only for
+spot ID and plate. A plate-only follow-up retained the dates and customer fields,
+then asked only for spot ID. An ambiguous 11/12 correction cleared the affected
+dates and requested clarification. Policy evidence survived all booking turns;
+the checkpoint contained all six messages before the ambiguity turn. No booking
+was created. No EnvAddressError/indexed-run/graph errors appeared during the check.
+
+Automatic approval review rejected replaying the pasted real name through the
+live model. The successful replay used fictional data only. Exact pasted wording
+is covered with scripted model responses in automated tests.
+
+Fixed: F-01 (5d132be), F-02 (1e95400), F-03 (0656b10).
+No remaining manual-only findings in this scoped audit.
