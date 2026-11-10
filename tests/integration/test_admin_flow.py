@@ -41,9 +41,35 @@ def store(tmp_path):
                 VALUES ('CTR-001','2026-11-20','06:00-22:00');
             INSERT INTO transport_slots (spot_id,slot_date,working_hours,hourly_price)
                 VALUES ('AIR-001','2026-11-13','06:00-22:00',5);
-            CREATE TABLE reservations (spot_id TEXT,start_time TEXT,end_time TEXT,status TEXT);
+            CREATE TABLE reservations (
+                reservation_id TEXT PRIMARY KEY NOT NULL,
+                spot_id TEXT NOT NULL,
+                slot_date TEXT NOT NULL CHECK (slot_date BETWEEN '2026-11-01' AND '2026-11-10'),
+                name TEXT NOT NULL,
+                surname TEXT NOT NULL,
+                car_number TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL CHECK (end_time > start_time),
+                status TEXT NOT NULL CHECK (status IN ('confirmed','active','completed','cancelled')),
+                created_at TEXT NOT NULL CHECK (created_at <= start_time),
+                CHECK (substr(start_time,1,10)=slot_date),
+                CHECK (substr(end_time,1,10)=slot_date),
+                FOREIGN KEY (spot_id,slot_date) REFERENCES transport_slots (spot_id,slot_date)
+            );
+            CREATE INDEX reservations_spot_time ON reservations (spot_id,start_time,end_time);
         """)
     return BookingStore(path)
+
+
+def insert_legacy_reservation(store, reservation_id="legacy", draft=DRAFT):
+    store.pending()  # Apply the fixture date-range migration before inserting a November 11-30 row.
+    with sqlite3.connect(store.path) as db:
+        db.execute("""INSERT INTO reservations
+            (reservation_id,spot_id,slot_date,name,surname,car_number,start_time,end_time,status,created_at)
+            VALUES (?,?,?,?,?,?,?,?, 'confirmed',?)""",
+            (reservation_id, draft["spot_id"], draft["start"][:10], draft["name"], draft["surname"],
+             draft["car_number"], draft["start"].replace("T", " "), draft["end"].replace("T", " "),
+             "2026-11-09 12:00:00+01:00"))
 
 
 class BookingModel(Model):
@@ -193,9 +219,7 @@ def test_pending_holds_are_atomic_and_rejection_releases(store):
 
 
 def test_legacy_overlap_and_adjacent_interval(store):
-    with sqlite3.connect(store.path) as db:
-        db.execute("INSERT INTO reservations VALUES (?,?,?,'confirmed')",
-                   (DRAFT["spot_id"], DRAFT["start"], DRAFT["end"]))
+    insert_legacy_reservation(store)
     with pytest.raises(ValueError, match="slot_unavailable"):
         store.reserve("thread", "request", DRAFT, "Intent")
     row = store.reserve("thread", "request", {**DRAFT, "start": DRAFT["end"],
@@ -214,8 +238,11 @@ async def test_admin_tool_revalidates_before_approval(store, change, reason):
     reservation_id = (await graph.aget_state(config)).values["reservation_id"]
     with sqlite3.connect(store.path) as db:
         if change == "conflict":
-            db.execute("INSERT INTO reservations VALUES (?,?,?,'confirmed')",
-                       (DRAFT["spot_id"], DRAFT["start"], DRAFT["end"]))
+            db.execute("""INSERT INTO reservations
+                (reservation_id,spot_id,slot_date,name,surname,car_number,start_time,end_time,status,created_at)
+                VALUES ('legacy',?,?,?,?,?,?,?,'confirmed','2026-11-09 12:00:00+01:00')""",
+                (DRAFT["spot_id"], DRAFT["start"][:10], DRAFT["name"], DRAFT["surname"],
+                 DRAFT["car_number"], DRAFT["start"].replace("T", " "), DRAFT["end"].replace("T", " ")))
         else:
             db.execute("UPDATE transport_slots SET working_hours='10:00-22:00'")
     store.claim_review(reservation_id, "approve")
@@ -226,15 +253,58 @@ async def test_admin_tool_revalidates_before_approval(store, change, reason):
     assert store.decide(reservation_id, True)["status"] == "rejected"
 
 
-def test_approved_row_is_same_record_and_replay_safe(store):
+def test_approved_request_is_promoted_to_one_confirmed_reservation_and_replay_safe(store):
     row = store.reserve("thread", "request", DRAFT, "Intent")
     approved = store.decide(row["reservation_id"], True)
     assert approved == {**row, "status": "approved"}
     assert store.decide(row["reservation_id"], True) == approved
+    with sqlite3.connect(store.path) as db:
+        reservations = db.execute("SELECT * FROM reservations WHERE reservation_id=?", (row["reservation_id"],)).fetchall()
+        assert len(reservations) == 1
+        names = [column[1] for column in db.execute("PRAGMA table_info(reservations)")]
+        confirmed = dict(zip(names, reservations[0]))
+        assert (confirmed["spot_id"], confirmed["slot_date"], confirmed["name"], confirmed["surname"],
+                confirmed["car_number"], confirmed["status"]) == (
+                    DRAFT["spot_id"], DRAFT["start"][:10], DRAFT["name"], DRAFT["surname"],
+                    DRAFT["car_number"], "confirmed")
+        assert confirmed["created_at"]
+        assert "2026-11-01" not in db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='reservations'").fetchone()[0]
     with pytest.raises(ValueError, match="slot_unavailable"):
         store.reserve("other-thread", "request", DRAFT, "Intent")
     with pytest.raises(Conflict):
         store.decide(row["reservation_id"], False)
+
+
+def test_approval_insert_failure_rolls_back_request_status(store):
+    row = store.reserve("thread", "request", DRAFT, "Intent")
+    with sqlite3.connect(store.path) as db:
+        db.execute("""CREATE TRIGGER fail_reservation_promotion BEFORE INSERT ON reservations
+            BEGIN SELECT RAISE(ABORT, 'forced insert failure'); END""")
+    with pytest.raises(sqlite3.IntegrityError, match="forced insert failure"):
+        store.decide(row["reservation_id"], True)
+    assert store.get(row["reservation_id"])["status"] == "pending"
+    with sqlite3.connect(store.path) as db:
+        assert db.execute("SELECT 1 FROM reservations WHERE reservation_id=?", (row["reservation_id"],)).fetchone() is None
+
+
+def test_reservations_migration_preserves_existing_fixture_rows(store):
+    legacy = {**DRAFT, "start": "2026-11-10T15:00:00+01:00", "end": "2026-11-10T16:00:00+01:00"}
+    with sqlite3.connect(store.path) as db:
+        db.execute("INSERT INTO transport_slots (spot_id,slot_date,working_hours) VALUES ('CTR-001','2026-11-10','06:00-22:00')")
+        db.execute("""INSERT INTO reservations
+            (reservation_id,spot_id,slot_date,name,surname,car_number,start_time,end_time,status,created_at)
+            VALUES ('legacy-reservation','CTR-001','2026-11-10',?,?,?,?,?,'confirmed','2026-11-09 12:00:00+01:00')""",
+            (legacy["name"], legacy["surname"], legacy["car_number"],
+             legacy["start"].replace("T", " "), legacy["end"].replace("T", " ")))
+    store.pending()  # initializes the additive request table and upgrades the fixture constraint
+    with sqlite3.connect(store.path) as db:
+        row = db.execute("""SELECT reservation_id,spot_id,slot_date,name,surname,car_number,status
+            FROM reservations WHERE reservation_id='legacy-reservation'""").fetchone()
+        assert row == ("legacy-reservation", "CTR-001", "2026-11-10", legacy["name"],
+                       legacy["surname"], legacy["car_number"], "confirmed")
+        schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='reservations'").fetchone()[0]
+        assert "2026-11-10" not in schema
 
 
 def test_migrate_confirmed_requests_preserves_identity_and_claims(store):

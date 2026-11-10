@@ -15,8 +15,11 @@ def slot_store(tmp_path):
             CREATE TABLE transport_slots (spot_id TEXT, slot_date TEXT, type TEXT,
                 hourly_price REAL, working_hours TEXT, current_availability INTEGER,
                 PRIMARY KEY (spot_id,slot_date));
-            CREATE TABLE reservations (spot_id TEXT, start_time TEXT, end_time TEXT,
-                status TEXT, name TEXT, car_number TEXT);
+            CREATE TABLE reservations (reservation_id TEXT PRIMARY KEY, spot_id TEXT NOT NULL,
+                slot_date TEXT NOT NULL, name TEXT NOT NULL, surname TEXT NOT NULL, car_number TEXT NOT NULL,
+                start_time TEXT NOT NULL, end_time TEXT NOT NULL, status TEXT NOT NULL,
+                created_at TEXT NOT NULL, FOREIGN KEY (spot_id,slot_date)
+                REFERENCES transport_slots (spot_id,slot_date));
         """)
         for day in ("2026-11-20", "2026-11-21"):
             for prefix, price in (("CTR", 8), ("AIR", 5), ("RIV", 6), ("STA", 7)):
@@ -65,9 +68,11 @@ def test_invalid_prefix_cannot_broaden_query(slot_store, facility):
 def test_overlap_pending_approved_hours_and_snapshot_semantics(slot_store):
     start, end = "2026-11-20T16:00:00+01:00", "2026-11-20T22:00:00+01:00"
     with sqlite3.connect(slot_store.path) as db:
-        db.execute("INSERT INTO reservations VALUES (?,?,?,'confirmed','PRIVATE','SECRET')",
-                   ("CTR-001", start, "2026-11-20T18:00:00+01:00"))
-        db.execute("INSERT INTO reservations VALUES (?,?,?,'cancelled','PRIVATE','SECRET')", ("CTR-004", start, end))
+        db.execute("""INSERT INTO reservations VALUES ('legacy-confirmed','CTR-001','2026-11-20',
+            'PRIVATE','SURNAME','SECRET',?,'2026-11-20T18:00:00+01:00','confirmed','2026-11-09 12:00:00+01:00')""",
+            (start,))
+        db.execute("""INSERT INTO reservations VALUES ('legacy-cancelled','CTR-004','2026-11-20',
+            'PRIVATE','SURNAME','SECRET',?,?,'cancelled','2026-11-09 12:00:00+01:00')""", (start, end))
     draft = {"spot_id": "CTR-002", "start": start, "end": end,
              "name": "Private", "surname": "Person", "car_number": "SECRET"}
     held = slot_store.reserve("thread", "hold", draft, "")

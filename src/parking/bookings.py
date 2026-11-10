@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import date, datetime
 import json
 from pathlib import Path
+import re
 import sqlite3
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
@@ -51,9 +52,40 @@ class BookingStore:
                     db.execute("ALTER TABLE booking_requests_migrated RENAME TO booking_requests")
                 if "decision_reason" not in {row[1] for row in db.execute("PRAGMA table_info(booking_requests)")}:
                     db.execute("ALTER TABLE booking_requests ADD COLUMN decision_reason TEXT")
+                self._migrate_reservations_date_range(db)
             yield db
         finally:
             db.close()
+
+    @staticmethod
+    def _migrate_reservations_date_range(db):
+        """Remove the fixture-only date bound while preserving every reservation row."""
+        row = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='reservations'").fetchone()
+        if not row or not re.search(r"slot_date\s+BETWEEN\s+'2026-11-01'\s+AND\s+'2026-11-10'", row[0], re.I):
+            return
+
+        schema = row[0]
+        migrated_schema = re.sub(
+            r"\s*CHECK\s*\(\s*slot_date\s+BETWEEN\s+'2026-11-01'\s+AND\s+'2026-11-10'\s*\)",
+            "",
+            schema,
+            count=1,
+            flags=re.I,
+        )
+        migrated_schema = re.sub(
+            r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?reservations\b",
+            "CREATE TABLE reservations_migrated",
+            migrated_schema,
+            count=1,
+            flags=re.I,
+        )
+        columns = [column[1] for column in db.execute("PRAGMA table_info(reservations)")]
+        names = ",".join(f'"{column}"' for column in columns)
+        db.execute(migrated_schema)
+        db.execute(f"INSERT INTO reservations_migrated ({names}) SELECT {names} FROM reservations")
+        db.execute("DROP TABLE reservations")
+        db.execute("ALTER TABLE reservations_migrated RENAME TO reservations")
+        db.execute("CREATE INDEX IF NOT EXISTS reservations_spot_time ON reservations (spot_id, start_time, end_time)")
 
     def reserve(self, thread_id, request_id, draft, summary):
         draft = ReservationDraft.model_validate(draft).model_dump()
@@ -208,9 +240,21 @@ class BookingStore:
             reason = None
             if approved:
                 try:
-                    self.validate_slot(db, json.loads(row["draft"]), reservation_id)
+                    draft = ReservationDraft.model_validate(json.loads(row["draft"])).model_dump()
+                    if any(not value or not value.strip() for value in draft.values()):
+                        raise ValueError("missing_details")
+                    self.validate_slot(db, draft, reservation_id)
                 except ValueError as error:
                     target, reason = "rejected", str(error)
+            if approved and target == "approved":
+                start = datetime.fromisoformat(draft["start"])
+                created_at = datetime.now(ZoneInfo("Europe/Warsaw")).isoformat(sep=" ")
+                db.execute("""INSERT INTO reservations
+                    (reservation_id,spot_id,slot_date,name,surname,car_number,start_time,end_time,status,created_at)
+                    VALUES (?,?,?,?,?,?,?,?, 'confirmed',?)""",
+                    (reservation_id, draft["spot_id"], start.date().isoformat(), draft["name"],
+                     draft["surname"], draft["car_number"], draft["start"].replace("T", " "),
+                     draft["end"].replace("T", " "), created_at))
             # The pending row must already exist. Updating by its primary key is
             # the conflict-update part of the upsert, without an insert fallback
             # that could create an unvalidated reservation or overwrite its data.

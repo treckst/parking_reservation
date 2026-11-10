@@ -8,6 +8,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from parking.graph.graph import build_graph
+from parking.graph.collection import draft_snapshot
+from parking.graph.discovery import reservation_question
 from tests.integration.test_admin_flow import BookingModel, DRAFT, store
 from tests.extraction_helpers import temporal_patch, updates
 
@@ -144,6 +146,37 @@ async def test_collector_receives_all_role_labelled_history():
     assert len(data["conversation"]) == len(history)
     assert data["conversation"][1] == {"role": "ai", "text": "Which spot and plate?"}
     assert data["current_state"]["draft"]["name"] == "Saved"
+
+
+def test_current_booking_state_asks_only_for_missing_customer_identity():
+    visit = {"spot_id": "AIR-001", "start": "2026-11-24T16:00:00+01:00",
+             "end": "2026-11-24T20:00:00+01:00"}
+    snapshot = draft_snapshot(visit)
+    assert snapshot["missing_fields"] == ["name", "surname", "car_number"]
+    state = {"booking_draft": visit, "parking_search": {"facility": "AIR", "slot_date": "2026-11-24",
+             "duration_hours": 4}, "parking_options": [{"spot_id": "AIR-001", "type": "standard",
+             "hourly_price": 5, "total_price": 20, "availability_checked": True}], "field_errors": {}}
+    reply = reservation_question(state)
+    assert "first name, surname, vehicle plate" in reply
+    assert "date" not in reply and "start time" not in reply and "Which space" not in reply
+
+    visit["name"] = "SavedName"
+    visit["surname"] = "SavedSurname"
+    assert draft_snapshot(visit)["missing_fields"] == ["car_number"]
+    reply = reservation_question({**state, "booking_draft": visit})
+    assert reply.endswith("Please provide your vehicle plate.")
+
+
+def test_selected_space_prompt_includes_missing_identity_with_missing_time():
+    visit = {"spot_id": "AIR-001", "start": None, "end": None}
+    state = {"booking_draft": visit, "parking_search": {"facility": "AIR", "slot_date": "2026-11-24",
+             "duration_hours": 4}, "parking_options": [{"spot_id": "AIR-001", "type": "standard",
+             "hourly_price": 5, "total_price": None, "working_hours": "06:00-22:00",
+             "availability_checked": False}], "field_errors": {}}
+    reply = reservation_question(state)
+    assert "What start time" in reply
+    assert "first name, surname, vehicle plate" in reply
+    assert "Which space" not in reply
 
 
 async def test_natural_dates_restart_followup_and_thread_isolation(store, tmp_path):

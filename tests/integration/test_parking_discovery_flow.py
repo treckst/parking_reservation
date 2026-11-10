@@ -72,8 +72,10 @@ async def test_evening_duration_options_explanation_restart_and_selection(slot_s
     # A conflicting reservation added after a date-only quote is excluded once
     # exact times are supplied. Names/plates from that row never enter evidence.
     with sqlite3.connect(slot_store.path) as db:
-        db.execute("INSERT INTO reservations VALUES (?,?,?,'confirmed','PRIVATE','SECRET')",
-                   ("CTR-001", "2026-11-20T17:00:00+01:00", "2026-11-20T18:00:00+01:00"))
+        db.execute("""INSERT INTO reservations
+            (reservation_id,spot_id,slot_date,name,surname,car_number,start_time,end_time,status,created_at)
+            VALUES ('legacy','CTR-001','2026-11-20','PRIVATE','SURNAME','SECRET',?,?,'confirmed',?)""",
+            ("2026-11-20T17:00:00+01:00", "2026-11-20T18:00:00+01:00", "2026-11-09T12:00:00+01:00"))
     model = DiscoveryModel(dates={"start": "2026-11-20T16:00:00+01:00", "provided_fields": ["start"]})
     async with AsyncSqliteSaver.from_conn_string(checkpoint) as saver:
         graph = build_graph(lambda: model, checkpointer=saver, booking_store=slot_store)

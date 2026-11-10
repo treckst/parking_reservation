@@ -6,7 +6,8 @@ subgraphs preserve conversation state. The customer agent uses a bound-tool loop
 to inspect/update its draft and ask for missing fields across turns. It collects details,
 saves a pending SQLite reservation, then passes its ID and summary to the compiled
 admin subgraph. After API review, its LLM decision runs through a ToolNode that
-sets the same record to approved or rejected. The parent replies from admin_result.
+transactionally marks the request approved and inserts a confirmed row into
+`reservations`; rejection leaves no confirmed row. The parent replies from admin_result.
 See [the admin approval API](docs/admin-approval.md) for request/resume details.
 
 The assistant offers reservation help and parking information. Greetings and
@@ -59,7 +60,9 @@ exclude overlaps with legacy bookings and pending/approved holds; the seed's
 `current_availability` snapshot is not a live interval guarantee.
 
 Customers choose an offered space (including "the first one") rather than needing
-to know an internal ID. Only then does the assistant ask for missing names/plates.
+to know an internal ID. Once selected, the assistant asks for every missing
+required field, including first name, surname, vehicle plate and any outstanding
+visit times.
 After an offered-space question, accepting a type ("I'd like the standard place")
 accepts any matching available space. A separate structured choice intent records
 that acceptance; SQL rechecks the location/date/type/interval and selects a matching

@@ -66,6 +66,10 @@ The additive `booking_requests` table shares the existing booking database with
 Both legacy blocking statuses and new pending/approved rows block overlapping
 intervals. `BEGIN IMMEDIATE` serializes the overlap check and insertion. Adjacent
 intervals are allowed. Replays use a stable ID derived from thread and request.
+On approval, the request is also inserted as a `confirmed` row in `reservations`
+inside the same write transaction. The fixture-only November 1-10 date bound on
+that table is removed by a preserving migration so later November slots can be
+confirmed.
 
 Use `GET /api/admin/reservations` to list pending requests and intent summaries.
 Each item supplies its `reservation_id`. Resume with:
@@ -88,14 +92,15 @@ and reservation summaries cannot supply administrator authorization.
 The admin LLM's structured decision is adapted to a fixed tool call executed by
 the subgraph's `ToolNode`. The tool receives the reservation ID from injected
 state rather than model-generated arguments. Inside `BEGIN IMMEDIATE`, approval
-rechecks opening hours and overlaps, excluding its own pending hold, then updates
-that same row to `approved`. A rejection or failed rule check sets `rejected` and
-releases the hold. This uses a primary-key update (the update side of an upsert):
-an absent pending record fails rather than inserting an unvalidated reservation.
-Identical finalization retries reuse the durable result; opposite decisions fail.
-Existing application `confirmed` rows migrate to `approved` transactionally,
-preserving IDs, drafts, summaries and dispatch claims. Legacy fixture statuses
-remain unchanged.
+rechecks opening hours and overlaps, excluding its own pending hold, inserts the
+matching `confirmed` reservation (including customer name, surname, plate and
+creation time), and updates the request to `approved`. These writes commit or roll
+back together. A rejection or failed rule check sets `rejected` and releases the
+hold without creating a confirmed row. An absent pending record fails rather than
+inserting an unvalidated reservation. Identical finalization retries reuse the
+durable result; opposite decisions fail. Existing application `confirmed` request
+rows migrate to `approved` transactionally, preserving IDs, drafts, summaries and
+dispatch claims. Legacy fixture statuses remain unchanged.
 
 Only after the database write succeeds does the admin subgraph return
 `admin_result = {"reservation_id": ..., "status": "approved" | "rejected", "reason": ...}`.

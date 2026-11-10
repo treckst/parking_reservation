@@ -79,6 +79,15 @@ def reservation_question(state):
     search = ParkingSearch.model_validate(state.get("parking_search", {}))
     draft = draft_snapshot(state.get("booking_draft", {}))["draft"]
     missing = draft_snapshot(draft)["missing_fields"]
+    identity = [field for field in ("name", "surname", "car_number") if field in missing]
+
+    def identity_follow_up():
+        if not draft.get("spot_id") or not identity:
+            return ""
+        return " I’ll also need your " + ", ".join({
+            "name": "first name", "surname": "surname", "car_number": "vehicle plate",
+        }[field] for field in identity) + "."
+
     spots = state.get("parking_options", [])
     explanation = f"A spot ID is a parking space label, such as {search.facility or 'CTR'}-001. " if state.get("intent", {}).get("explain_spot_id") else ""
     if not search.facility:
@@ -117,12 +126,12 @@ def reservation_question(state):
         if next(iter(errors)) == "start":
             question += f" Hours: {display[0]['working_hours']}."
     elif not search.slot_date:
-        question = "Please provide a date, start time and duration."
+        question = "Please provide a date, start time and duration." + identity_follow_up()
     elif "start" in missing:
         duration = f" for your {search.duration_hours:g}-hour stay" if search.duration_hours else ""
-        question = f"What start time{duration}? Hours: {display[0]['working_hours']}."
+        question = f"What start time{duration}? Hours: {display[0]['working_hours']}." + identity_follow_up()
     elif "end" in missing:
-        question = "What end time or duration?"
+        question = "What end time or duration?" + identity_follow_up()
     elif "spot_id" in missing:
         if state.get("space_choice") == "defer":
             question = "Your type preference is saved. Tell me when you're ready to choose a space."
