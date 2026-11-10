@@ -1,13 +1,13 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 1
+current_phase: 01
 current_phase_name: Persistent Grounded Policy Chat
-status: executing
-stopped_at: "Phase 1 planned and checked; next: $gsd-execute-phase 1"
-last_updated: "2026-11-10T09:34:16.352Z"
+status: Halted at prerequisite authentication gate
+stopped_at: "Plan 01-01 halted: invalidated OpenAI key and missing embedding provenance; see 01-01-USER-SETUP.md"
+last_updated: "2026-11-10T09:49:57.287Z"
 last_activity: 2026-11-10
-last_activity_desc: "Completed Phase 1 planning: eight plans, sixteen tasks, six waves; 14/14 requirements and 22/22 decisions covered; independent plan check passed; no implementation executed."
-state_head: 14777b25437c8933c79c7467dde3606b6cab2f71
+last_activity_desc: Committed prerequisite gates; 18 local tests passed, 2 required external tests failed; SqliteSaver adapter and deployment not started.
+state_head: bc783be0c131a6492784e6ee2980520162f907fc
 progress:
   total_phases: 4
   completed_phases: 0
@@ -23,15 +23,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-10)
 
 **Core value:** Customers can request a valid parking reservation through conversation, with accurate availability, no overlapping bookings, administrator approval, and no disclosure of other customers' personal details.
-**Current focus:** Phase 1 - Persistent Grounded Policy Chat; eight independently checked plans are ready to execute.
+**Current focus:** Phase 1 runtime gates: replace invalidated provider key and establish embedding provenance; dependent work blocked.
 
 ## Current Position
 
-Phase: 1 (Persistent Grounded Policy Chat) — READY TO EXECUTE
-Plan: 0 of 8 in current phase (not started)
-Status: Ready to execute
+Phase: 01 (Persistent Grounded Policy Chat) — HALTED AT PREREQUISITE GATE
+Plan: 0 of 8 complete; 01-01 halted during task 1
+Status: Halted at prerequisite authentication gate
 Roadmap: APPROVED by the user on 2026-11-10
-Last activity: 2026-11-10 - Completed Phase 1 planning: eight plans, sixteen tasks, six waves; 14/14 requirements and 22/22 decisions covered; independent plan check passed; no implementation executed.
+Last activity: 2026-11-10 - Committed prerequisite gates; 18 local tests passed, 2 required external tests failed; SqliteSaver adapter and deployment not started.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -85,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-10T09:33:56.546Z
-Stopped at: Phase 1 planned and checked; next: $gsd-execute-phase 1
+Last session: 2026-11-10T09:49:57.234Z
+Stopped at: Plan 01-01 halted: invalidated OpenAI key and missing embedding provenance; see 01-01-USER-SETUP.md
 Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-01-PLAN.md

@@ -77,6 +77,7 @@ Replace the invalidated backend provider key locally, respecting shell-over-dote
 
 - GSD worktree base check returned `shouldDegrade: true`, reason `fork-ref-unknown` (origin/HEAD unresolved). Recorded `dispatch-isolation=none` and ran sequentially in the current checkout, as directed by the workflow.
 - Added `.env.example` and a setup checkpoint earlier than plan 01-08 so the blocked prerequisite has concrete recovery instructions. No product scope changed.
+- The registered roadmap/state progress handlers counted the halted SUMMARY as a completed plan. Corrected their generated counters/checkbox to zero complete; the plan index correctly reports the halt and blocks all dependents.
 - Task 01-01-01 is a configuration/integration probe; no feature TDD RED/GREEN claim is made. The actual external failure is an authentication/configuration gate, not feature RED evidence.
 
 ## Next Phase Readiness
