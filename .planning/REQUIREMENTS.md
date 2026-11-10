@@ -125,16 +125,67 @@ These refine accepted requirements; they do not add release features or silently
 
 ## Traceability
 
-Phase assignments will be populated after requirements confirmation and roadmap creation.
+All approved v1 requirements are assigned to exactly one owning phase in the user-approved Vertical MVP roadmap. No implementation is complete.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| GRAPH-01 | Phase 1 | Pending |
+| GRAPH-02 | Phase 1 | Pending |
+| GRAPH-03 | Phase 1 | Pending |
+| GRAPH-04 | Phase 1 | Pending |
+| GRAPH-05 | Phase 2 | Pending |
+| GRAPH-06 | Phase 1 | Pending |
+| RAG-01 | Phase 2 | Pending |
+| RAG-02 | Phase 1 | Pending |
+| RAG-03 | Phase 2 | Pending |
+| RAG-04 | Phase 2 | Pending |
+| RAG-05 | Phase 1 | Pending |
+| RAG-06 | Phase 2 | Pending |
+| RAG-07 | Phase 1 | Pending |
+| BOOK-01 | Phase 3 | Pending |
+| BOOK-02 | Phase 3 | Pending |
+| BOOK-03 | Phase 3 | Pending |
+| BOOK-04 | Phase 2 | Pending |
+| BOOK-05 | Phase 2 | Pending |
+| BOOK-06 | Phase 3 | Pending |
+| BOOK-07 | Phase 3 | Pending |
+| BOOK-08 | Phase 3 | Pending |
+| BOOK-09 | Phase 4 | Pending |
+| BOOK-10 | Phase 4 | Pending |
+| PRIV-01 | Phase 1 | Pending |
+| PRIV-02 | Phase 3 | Pending |
+| PRIV-03 | Phase 2 | Pending |
+| PRIV-04 | Phase 3 | Pending |
+| PRIV-05 | Phase 1 | Pending |
+| PRIV-06 | Phase 4 | Pending |
+| API-01 | Phase 1 | Pending |
+| API-02 | Phase 2 | Pending |
+| API-03 | Phase 4 | Pending |
+| API-04 | Phase 4 | Pending |
+| API-05 | Phase 1 | Pending |
+| UI-01 | Phase 3 | Pending |
+| UI-02 | Phase 2 | Pending |
+| UI-03 | Phase 4 | Pending |
+| UI-04 | Phase 4 | Pending |
+| DEL-01 | Phase 2 | Pending |
+| DEL-02 | Phase 1 | Pending |
+| DEL-03 | Phase 4 | Pending |
+| DEL-04 | Phase 1 | Pending |
+| DEL-05 | Phase 4 | Pending |
+| DEL-06 | Phase 4 | Pending |
+| TEST-01 | Phase 4 | Pending |
+| TEST-02 | Phase 4 | Pending |
+| TEST-03 | Phase 2 | Pending |
+| TEST-04 | Phase 3 | Pending |
+| TEST-05 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 49 total
-- Mapped to phases: 0
-- Unmapped: 49 (roadmap not yet created)
+- Mapped to phases: 49 (Phase 1: 14; Phase 2: 12; Phase 3: 10; Phase 4: 13)
+- Unmapped: 0
+- Duplicate assignments: 0
+- Implementation complete: 0; roadmap approved
 
 ---
 *Requirements defined: 2026-11-10*
-*Last updated: 2026-11-10 after approval of all 49 v1 requirements and Vertical MVP delivery*
+*Last updated: 2026-11-10 after approval of all 49 v1 requirements and the four-phase Vertical MVP roadmap*
