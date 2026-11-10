@@ -4,10 +4,10 @@ current_phase: 01
 current_phase_name: Persistent Grounded Policy Chat
 status: Phase 1 implementation recorded; verification skipped by explicit user request
 stopped_at: Plans 01-02 through 01-08 implemented with acceptance evidence unverified
-last_updated: "2026-11-10T14:50:30.941Z"
+last_updated: "2026-11-10T15:42:13.498Z"
 last_activity: 2026-11-10
 last_activity_desc: Customer LLM inspects and updates drafts through a ToolNode, asks for missing schema fields and submits only complete drafts; 93 offline Python and 3 JS tests pass; deployment not rebuilt.
-state_head: 2e879501c6458751534b13f6a7546bf57747ed6f
+state_head: bed508584bdb8a9e82ffcaf4a8b87c695e226253
 progress:
   total_phases: 4
   completed_phases: 0
@@ -36,7 +36,7 @@ Phase: 01 (Persistent Grounded Policy Chat) — IMPLEMENTED / UNVERIFIED
 Plan: 8 of 8 implementation summaries recorded; new acceptance checks unverified
 Status: Phase 1 implementation recorded; verification skipped by explicit user request
 Roadmap: APPROVED by the user on 2026-11-10
-Last activity: 2026-11-10 - Completed quick task 261110-lvz: Customer reservation draft inspect/update/ask/submit tool loop; 93 offline Python and 3 JS tests passed.
+Last activity: 2026-11-10 - Completed quick task 261110-n4c: Reservation-first assistant and parking information with conversational help; 119 Python and 3 JS tests passed.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -119,3 +119,4 @@ Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md
 | 261110-llb | English-only application and structured language gate | 2026-11-10 | 1e246a6 | complete | [261110-llb-english-only-application-with-structured](./quick/261110-llb-english-only-application-with-structured/) |
 | 261110-lqr | Pending reservation handoff and admin ToolNode finalization via shared admin_result | 2026-11-10 | 4a89412 | complete | [261110-lqr-persist-pending-reservation-and-finalize](./quick/261110-lqr-persist-pending-reservation-and-finalize/) |
 | 261110-lvz | Customer reservation draft inspect/update/ask/submit ToolNode loop | 2026-11-10 | 2e87950 | complete | [261110-lvz-customer-reservation-agent-tools-for-ins](./quick/261110-lvz-customer-reservation-agent-tools-for-ins/) |
+| 261110-n4c | Reservation-first assistant with conversational help, parking information routing and aligned UI | 2026-11-10 | bed5085 | complete | [261110-n4c-reservation-first-assistance-and-parking](./quick/261110-n4c-reservation-first-assistance-and-parking/) |
