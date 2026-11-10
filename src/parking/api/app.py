@@ -50,6 +50,8 @@ def create_app(settings=None, client=None):
 
     @app.middleware("http")
     async def browser_boundary(request, call_next):
+        if request.url.path == "/health":
+            return await call_next(request)
         origin = request.headers.get("origin")
         if origin and origin not in settings.allowed_origins:
             return JSONResponse({"error_code": "origin_denied"}, status_code=403)
@@ -86,6 +88,10 @@ def create_app(settings=None, client=None):
     @app.get("/")
     async def index():
         return FileResponse(WEB / "index.html")
+
+    @app.get("/health")
+    async def health():
+        return {"ok": True}
 
     @app.get("/app.mjs")
     async def script():

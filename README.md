@@ -15,11 +15,11 @@ accounts or application API keys are used. Credentials never belong in git.
 uv sync --locked
 $env:PYTHONUTF8="1"
 uv run langgraph build -t parking-graph:phase01
-docker compose -f docker/compose.yaml up -d chromadb postgres redis graph
-uv run --env-file .env uvicorn parking.api.app:create_app --factory --app-dir src --host 127.0.0.1 --port 8080
+docker compose --env-file .env -f docker/compose.yaml up -d --build --wait
 ```
 
-Open http://127.0.0.1:8080. Start the API after building and starting the graph.
+Open http://127.0.0.1:8080. Compose starts the API container after the graph is
+healthy. The API container serves both REST endpoints and the existing chat UI.
 The API invokes only the remote SDK; it has no in-process graph fallback.
 The private local Agent Server listens on loopback port 8123. Keep this local
 trusted demo off public networks: its internal server has no customer login.
@@ -41,6 +41,32 @@ The exact clients remain `ChatOpenAI(model="gpt-6-luna")` and
 embedding-provenance probe runs. Provider/configuration failures are service
 failures; they never cause model substitution or a semantic retrieval retry.
 
+Graph tracing is controlled by Compose environment interpolation:
+`LANGSMITH_TRACING` (defaults to `true`), `LANGSMITH_API_KEY`,
+`LANGSMITH_PROJECT` and `LANGSMITH_ENDPOINT`. Export these variables or set them
+in the root `.env` and use `docker compose --env-file .env ...` as above. Shell
+values take precedence; explicitly setting tracing to `false` disables it.
+Keys stay runtime environment values, never image build arguments or source.
+
+Retrieval combines LangChain BM25 and dense Chroma retrievers using
+`EnsembleRetriever(weights=[0.4, 0.6])`. Reciprocal-rank fusion deduplicates by
+stable source/page identity. BM25 reads the existing approved Chroma page text;
+both branches apply the same facility/shared-policy scope. The corpus is not
+modified or re-embedded. Restart the graph after deliberate corpus updates to
+refresh cached keyword indexes.
+
+In `docker/api.Dockerfile`, Uvicorn imports the `create_app` factory from
+`parking.api.app` and listens on `0.0.0.0:8080` inside the container. Compose
+publishes it only at `127.0.0.1:8080` on the host. The graph is reached through
+`http://graph:8000`, rather than the API container's localhost. For optional
+host-only development the equivalent command is:
+`uv run --env-file .env uvicorn parking.api.app:create_app --factory --app-dir src --host 127.0.0.1 --port 8080`.
+
+The dedicated API image derives from `parking-graph:phase01` to share installed
+dependency versions, then replaces its entrypoint with Uvicorn and copies the
+current application/UI source. Build the graph first, as shown above. Runtime
+graph credentials are injected by Compose and are not baked into either image.
+
 ## Storage and recovery
 
 Graph checkpoints use the exact synchronous `SqliteSaver`, with an asynchronous
@@ -50,7 +76,8 @@ drain. Compose mounts the whole `.runtime/graph` directory at `/state`, includin
 SQLite journals, and uses `/state/checkpoints.sqlite3`. PostgreSQL holds Agent
 Server scheduling/metadata; it does not replace the custom checkpoint file.
 
-The host API uses `.runtime/application.sqlite3` for owner/thread bindings and
+The API uses `.runtime/application.sqlite3` (mounted at `/state/application.sqlite3`)
+for owner/thread bindings and
 the submission ledger. Keep it separate from checkpoints and the preserved
 `ingested_mock_data/parking_november_2026.sqlite3` fixture. Run one graph server
 against this checkpoint file. Separate API processes can share the registry;
@@ -70,10 +97,11 @@ cookies after closing all windows. Strict fresh-conversation-on-browser-reopen
 (D-06) is not established.** Browsers without Web Locks detach on load, so refresh
 continuity is also not established there. The target-browser matrix is unverified.
 
-## Tests (written; not run in the current execution)
+## Tests
 
-The latest user invocation explicitly requested `--skip-gates --no-verify`.
-No passing results should be inferred for the new implementation.
+The original phase execution skipped acceptance checks using `--skip-gates
+--no-verify`. The hybrid/container follow-up ran its focused tests; see its
+summary in `.planning/quick/`. Full phase acceptance remains separate.
 
 ```powershell
 uv run pytest -m "not deployed and not live_model" -q

@@ -21,6 +21,8 @@ dependencies = [
     "langgraph-sdk==0.4.14",
     "fastapi==0.162.2",
     "uvicorn==0.54.0",
+    "langchain-classic>=1.0.8",
+    "rank-bm25==0.2.2",
 ]
 
 [dependency-groups]
@@ -31,6 +33,17 @@ dev = [
     "pytest-asyncio==1.4.1.post1",
     "httpx==0.28.1",
 ]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["parking*"]
+
+[tool.setuptools.package-data]
+"parking" = ["web/*.html", "web/*.mjs", "web/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

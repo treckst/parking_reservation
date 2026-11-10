@@ -48,7 +48,10 @@ services:
       CHROMA_PORT: "8000"
       CHECKPOINT_DB_PATH: /state/checkpoints.sqlite3
       APPLICATION_DB_PATH: /state/application.sqlite3
-      LANGSMITH_TRACING: "false"
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-parking-reservation}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     volumes:
       - ../.runtime/graph:/state
     depends_on:
@@ -63,6 +66,29 @@ services:
       interval: 5s
       timeout: 4s
       retries: 30
+
+  api:
+    image: parking-api:phase01
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      GRAPH_URL: http://graph:8000
+      APPLICATION_DB_PATH: /state/application.sqlite3
+      CHECKPOINT_DB_PATH: /state/unused-checkpoints.sqlite3
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://127.0.0.1:8080,http://localhost:8080}
+    volumes:
+      - ../.runtime:/state
+    depends_on:
+      graph:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
 
 volumes:
   chroma_data:

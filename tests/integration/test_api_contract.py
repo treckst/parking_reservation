@@ -76,3 +76,16 @@ def test_foreign_origin_denied(api):
     response = client.post("/api/threads", headers={"Origin": "https://attacker.example"})
     assert response.status_code == 403
     sdk.threads.create.assert_not_awaited()
+
+
+def test_ui_assets_and_health_do_not_require_graph_calls(api):
+    client, sdk, app = api
+    with app.state.registry.connection() as db:
+        before = db.execute("SELECT count(*) FROM owners").fetchone()[0]
+    assert client.get("/health").json() == {"ok": True}
+    with app.state.registry.connection() as db:
+        assert db.execute("SELECT count(*) FROM owners").fetchone()[0] == before
+    assert 'id="composer"' in client.get("/").text
+    assert client.get("/app.mjs").status_code == 200
+    assert client.get("/styles.css").status_code == 200
+    sdk.runs.create.assert_not_awaited()

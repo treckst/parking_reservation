@@ -1,9 +1,14 @@
 """Read-only, bounded retrieval from the existing page collection."""
 
 from functools import lru_cache
+import re
 
 import chromadb
 from langchain_chroma import Chroma
+from langchain_classic.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
+from langchain_core.documents import Document
+from langchain_core.runnables import RunnableLambda
 
 from parking.models import create_embeddings
 from parking.settings import Settings
@@ -40,16 +45,74 @@ def vector_store():
 
 
 def retrieve(question: str, facilities: list[str]) -> list[dict]:
-    store = vector_store()
     results = {}
     for facility in facilities:
+        if facility not in {"CTR", "RIV", "STA", "AIR"}:
+            raise ValueError("Unsupported facility")
         source = f"ingested_mock_data/pdfs/facility_{facility.lower()}.pdf"
-        for document in store.similarity_search(question, k=2, filter={"source": source}):
+        search_scope(results, question, (source,), 2)
+    shared = tuple(source for source in SOURCES if "/facility_" not in source)
+    search_scope(results, question, shared, 4)
+    # Preserve reciprocal-rank fusion order within each bounded scope.
+    return list(results.values())
+
+
+def tokenize(text):
+    """Unicode words retain Polish letters; punctuation/case do not split matches."""
+    return re.findall(r"\w+", text.casefold())
+
+
+def normalize_documents(documents, sources):
+    results = {}
+    for document in documents:
+        if document.metadata.get("source") in sources:
             add_document(results, document)
-    shared = [source for source in SOURCES if "/facility_" not in source]
-    for document in store.similarity_search(question, k=4, filter={"source": {"$in": shared}}):
-        add_document(results, document)
-    return sorted(results.values(), key=lambda d: (d["source"], d["page"], d["id"]))
+    return [Document(
+        id=record["id"], page_content=record["text"], metadata={
+            "source": record["source"], "page": record["page"],
+            "evidence_id": record["id"],
+        },
+    ) for record in results.values()]
+
+
+def create_ensemble(store, sources, k):
+    """Both retrievers use the same approved Chroma pages and source scope."""
+    source_filter = {"source": {"$in": list(sources)}}
+    corpus = store.get(where=source_filter, limit=37, include=["documents", "metadatas"])
+    if len(corpus["ids"]) > 36:
+        raise ValueError("Policy corpus exceeds the supported 36-page scope")
+    documents = normalize_documents([
+        Document(page_content=text, metadata=metadata)
+        for text, metadata in zip(corpus["documents"], corpus["metadatas"], strict=True)
+        if isinstance(text, str) and isinstance(metadata, dict)
+    ], sources)
+    if not documents:
+        return None
+    # Sorting gives keyword ties a repeatable corpus order.
+    documents.sort(key=lambda doc: doc.metadata["evidence_id"])
+    bm25_retriever = BM25Retriever.from_documents(documents, k=k, preprocess_func=tokenize)
+    dense_retriever = store.as_retriever(search_kwargs={"k": k, "filter": source_filter}) | RunnableLambda(
+        lambda docs: normalize_documents(docs, sources)
+    )
+    ensemble_retriever = EnsembleRetriever(
+        retrievers=[bm25_retriever, dense_retriever],
+        weights=[0.4, 0.6],
+        id_key="evidence_id",
+    )
+    return ensemble_retriever
+
+
+@lru_cache(maxsize=8)
+def hybrid_retriever(sources, k):
+    # The reference collection is static; restart graph after deliberate corpus changes.
+    return create_ensemble(vector_store(), sources, k)
+
+
+def search_scope(results, question, sources, k):
+    retriever = hybrid_retriever(sources, k)
+    if retriever is not None:
+        for document in retriever.invoke(question)[:k]:
+            add_document(results, document)
 
 
 def add_document(results, document):
