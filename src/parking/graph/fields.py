@@ -24,6 +24,7 @@ QUESTIONS = {
     "car_number": "Please provide your vehicle plate.",
 }
 INTERVAL_QUESTION = "Please confirm an end time after the start on the same date."
+DURATION_QUESTION = "The duration and start/end times differ. Which should I change?"
 
 
 def normalize_field(field, value):
@@ -83,7 +84,11 @@ def apply_field_updates(state, updates):
             target[field] = None
             errors[field] = QUESTIONS[field]
     if "slot_date" in touched and not search["slot_date"]:
-        draft.update(start=None, end=None)
+        for field in ("start", "end"):
+            if field not in valid:
+                draft[field] = None
+        if any(draft.get(field) for field in ("start", "end")):
+            errors["slot_date"] = QUESTIONS["slot_date"]
     elif "slot_date" not in touched:
         for field in ("start", "end"):
             if field in valid and draft.get(field):
@@ -117,7 +122,14 @@ def apply_field_updates(state, updates):
         else:
             if errors.get("end") == INTERVAL_QUESTION:
                 errors.pop("end")
-            search["duration_hours"] = hours
+            if "duration_hours" in valid and search["duration_hours"] is not None and abs(search["duration_hours"] - hours) > 0.001:
+                errors["duration_hours"] = DURATION_QUESTION
+            elif errors.get("duration_hours") == DURATION_QUESTION and search["duration_hours"] is not None and abs(search["duration_hours"] - hours) > 0.001:
+                pass
+            else:
+                if errors.get("duration_hours") == DURATION_QUESTION:
+                    errors.pop("duration_hours")
+                search["duration_hours"] = hours
     if draft.get("spot_id") and search["facility"] and not draft["spot_id"].startswith(search["facility"] + "-"):
         draft["spot_id"] = None
         if "spot_id" in touched:

@@ -19,7 +19,8 @@ def search_filters(state, *, spot_id=None):
         if prefix in FACILITIES:
             search["facility"] = prefix
     missing = draft_snapshot(draft)["missing_fields"]
-    complete = "start" not in missing and "end" not in missing
+    complete = "start" not in missing and "end" not in missing and not any(
+        field in state.get("field_errors", {}) for field in ("slot_date", "start", "end", "duration_hours"))
     if complete:
         start, end = (datetime.fromisoformat(draft[key]) for key in ("start", "end"))
         search.update(slot_date=start.date().isoformat(), duration_hours=(end - start).total_seconds() / 3600)
@@ -33,7 +34,8 @@ class ParkingDiscovery:
 
     async def lookup(self, state):
         filters = search_filters(state)
-        if not filters["facility"]:
+        if not filters["facility"] or any(field in state.get("field_errors", {})
+                for field in ("facility", "slot_date", "spot_type")):
             return {"parking_options": []}
         spots = await asyncio.to_thread(self.store.find_slots, **filters)
         draft = dict(state.get("booking_draft", {}))
@@ -50,7 +52,8 @@ class ParkingDiscovery:
 
     def record(self, state):
         filters = search_filters(state, spot_id=state.get("booking_draft", {}).get("spot_id"))
-        if not filters["facility"]:
+        if not filters["facility"] or any(field in state.get("field_errors", {})
+                for field in ("facility", "slot_date", "spot_type")):
             return {}
         key = f"{state['query_index']}:1"
         if key in state.get("evidence", {}):
@@ -70,6 +73,8 @@ def reservation_question(state):
     if not search.facility:
         return explanation + "Where would you like to park: City Centre, Riverside, Station or Airport?"
     if not spots:
+        if state.get("field_errors"):
+            return explanation + next(iter(state["field_errors"].values()))
         when = " for that interval" if draft.get("start") and draft.get("end") else f" on {search.slot_date}" if search.slot_date else ""
         return explanation + f"No matching spaces at {FACILITIES[search.facility]}{when}. Try another date, time or location."
 

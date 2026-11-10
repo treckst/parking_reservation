@@ -88,6 +88,25 @@ def test_duplicate_operations_need_clarification_but_keep_siblings():
     assert result["booking_draft"]["name"] == "Saved" and "end" in result["field_errors"]
 
 
+def test_date_clarification_preserves_explicit_valid_timestamp_siblings_but_blocks_availability():
+    from parking.graph.discovery import search_filters
+    result = apply({}, {"start": "2026-11-24T15:00:00+01:00", "end": "2026-11-24T20:00:00+01:00"},
+        [{"field": "slot_date", "operation": "clarify", "value": None}])
+    assert result["booking_draft"]["start"] == "2026-11-24T15:00:00+01:00"
+    assert result["booking_draft"]["end"] == "2026-11-24T20:00:00+01:00"
+    assert "slot_date" in result["field_errors"] and not reservation_ready(result)
+    assert search_filters(result)["start"] is None
+
+
+def test_conflicting_duration_is_preserved_until_the_customer_resolves_it():
+    result = apply({}, {"start": "2026-11-24T15:00:00+01:00", "end": "2026-11-24T20:00:00+01:00", "duration_hours": "6"})
+    assert result["parking_search"]["duration_hours"] == 6
+    assert "duration_hours" in result["field_errors"]
+    assert apply(result)["field_errors"] == result["field_errors"]
+    result = apply(result, {"end": "2026-11-24T21:00:00+01:00"})
+    assert result["parking_search"]["duration_hours"] == 6 and not result["field_errors"]
+
+
 def test_schemas_reject_hidden_state_and_explicitly_model_operations():
     with pytest.raises(ValidationError):
         ReservationExtraction.model_validate({"updates": [{"field": "admin_result", "operation": "set", "value": "approved"}]})
@@ -123,3 +142,16 @@ async def test_missing_year_example_updates_public_state_before_collection():
         "start": "2026-11-24T15:00:00+01:00", "end": "2026-11-24T20:00:00+01:00",
         "slot_date": "2026-11-24", "duration_hours": 5, "spot_type": "standard"}
     assert not result["field_errors"] and not reservation_ready(result)
+
+
+async def test_unresolved_supplied_date_cannot_broaden_sql_or_claim_no_spaces():
+    from unittest.mock import Mock
+    from parking.graph.discovery import ParkingDiscovery, reservation_question
+
+    store = Mock()
+    state = apply({"parking_search": {"facility": "AIR"}}, operations=[
+        {"field": "slot_date", "operation": "clarify", "value": None}])
+    result = await ParkingDiscovery(store).lookup(state)
+    store.find_slots.assert_not_called()
+    reply = reservation_question({**state, **result})
+    assert "confirm the reservation date" in reply and "No matching spaces" not in reply
