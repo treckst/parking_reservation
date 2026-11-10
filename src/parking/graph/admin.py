@@ -14,10 +14,7 @@ from parking.graph.schemas import AdminDecision, AdminInput, AdminOutput, AdminR
 
 
 def build_admin_graph(model_factory, store):
-    def await_review(state):
-        # Keep this node name so checkpoints paused by the former human-review
-        # graph can resume after deployment. It no longer interrupts or trusts
-        # a resume payload as a decision.
+    def validate_request(state):
         row = store.get(state["reservation_id"])
         draft = ReservationDraft.model_validate(state["booking_draft"]).model_dump()
         saved = ReservationDraft.model_validate(json.loads(row["draft"])).model_dump()
@@ -60,11 +57,11 @@ def build_admin_graph(model_factory, store):
             content=row["status"], tool_call_id=tool_call_id, id=f"result:{state['reservation_id']}")]})
 
     workflow = StateGraph(AdminState, input_schema=AdminInput, output_schema=AdminOutput)
-    workflow.add_node("await_review", await_review)
+    workflow.add_node("validate_request", validate_request)
     workflow.add_node("review", review)
     workflow.add_node("tools", ToolNode([persist_admin_decision], messages_key="admin_messages", handle_tool_errors=False))
-    workflow.add_edge(START, "await_review")
-    workflow.add_conditional_edges("await_review", lambda s: END if s.get("admin_result") else "review")
+    workflow.add_edge(START, "validate_request")
+    workflow.add_conditional_edges("validate_request", lambda s: END if s.get("admin_result") else "review")
     workflow.add_edge("review", "tools")
     workflow.add_edge("tools", END)
     return workflow

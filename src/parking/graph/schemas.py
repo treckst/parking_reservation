@@ -208,11 +208,6 @@ class ReservationSummary(StrictModel):
     summary: str = Field(min_length=1, max_length=2000)
 
 
-class AdminResponse(StrictModel):
-    reservation_id: str
-    response: str = Field(min_length=1, max_length=2000)
-
-
 class AdminDecision(StrictModel):
     response: Literal["approve", "reject"]
 
@@ -250,7 +245,6 @@ class AdminInput(TypedDict):
 class AdminState(AdminInput, total=False):
     # Shared handoff keys have the same names/types as MainState. Tool history
     # stays private to the compiled subgraph and cannot enter customer messages.
-    admin_response: dict
     admin_decision: dict
     admin_messages: Annotated[list[AnyMessage], add_messages]
     admin_result: dict

@@ -8,7 +8,8 @@ saves a pending SQLite reservation, then passes its ID and summary to the compil
 admin subgraph. Its automatic structured LLM review runs through a ToolNode that
 transactionally marks the request approved and inserts a confirmed row into
 `reservations`; rejection leaves no confirmed row. The parent replies from admin_result.
-See [automatic admin review](docs/admin-approval.md) for handoff and recovery details.
+The REST API serves the chat UI; admin decisions run entirely inside the parent graph.
+See [automatic admin review](docs/admin-approval.md) for the shared-state handoff and database writes.
 
 The assistant offers reservation help and parking information. Greetings and
 general questions such as "can you help?" use a conversational route, with no

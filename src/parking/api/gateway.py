@@ -5,8 +5,6 @@ import json
 
 from langgraph_sdk import get_client
 
-from parking.api.admin import AdminGateway
-from parking.bookings import BookingStore
 from parking.graph.schemas import GraphOutput
 
 
@@ -14,7 +12,6 @@ class Gateway:
     def __init__(self, settings, submissions, client=None):
         self.client = client or get_client(url=settings.graph_url, timeout=20)
         self.submissions = submissions
-        self.admin = AdminGateway(self.client, BookingStore(settings.booking_path), submissions)
 
     async def create_thread(self):
         thread = await asyncio.wait_for(self.client.threads.create(), timeout=20)
@@ -65,15 +62,6 @@ class Gateway:
                 await asyncio.wait_for(self.client.runs.join(thread_id, row["run_id"]), timeout=20)
                 state = await asyncio.wait_for(self.client.threads.get_state(thread_id), timeout=20)
                 values = state.get("values", {})
-                if "admin" in state.get("next", []) and values.get("reservation_id"):
-                    booking = self.admin.store.get(values["reservation_id"])
-                    if (booking["thread_id"] != thread_id or booking["request_id"] != request_id
-                            or values.get("request_id") != request_id):
-                        raise ValueError("Mismatched pending reservation")
-                    booking = await self.admin.reconcile(booking, state)
-                    if booking["review_run_id"] and booking["review_run_id"] != row["run_id"]:
-                        return await self.status(owner, thread_id, request_id)
-                    return self.project(row)
                 if run["status"] == "interrupted":
                     self.submissions.transition(row, "accepted", "proven_failed")
                     return self.project(self.submissions.get(owner, thread_id, request_id))

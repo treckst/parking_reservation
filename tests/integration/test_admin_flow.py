@@ -1,27 +1,20 @@
-"""Real nested graph, durable SQLite restart, mocked provider and remote SDK."""
+"""Automatic admin subgraph, durable SQLite restart and mocked provider."""
 
 import json
 import sqlite3
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langgraph.types import Command
 from langchain_core.messages import AIMessage
 
-from parking.api.app import create_app
 from parking.api.sessions import Conflict
 from parking.bookings import BookingStore
 from parking.graph.graph import build_graph
 from parking.graph.admin import build_admin_graph
 from parking.graph.schemas import AdminDecision, Intent, ReservationExtraction, ReservationDraft, ReservationSummary
 from tests.extraction_helpers import updates
-from parking.settings import Settings
 from tests.unit.test_policy_flow import DOCUMENT, Model
 
 
@@ -160,7 +153,7 @@ async def test_automatic_nested_review_and_restart_preserves_state(store, tmp_pa
         assert store.get(reservation_id)["status"] == status
         state = (await graph.aget_state(config)).values
         assert state["admin_result"] == {"reservation_id": reservation_id, "status": status, "reason": None}
-        assert not {"admin_decision", "admin_response", "admin_messages"} & state.keys()
+        assert not {"admin_decision", "admin_messages"} & state.keys()
         assert ("approved" if decision == "approve" else "rejected") in output["final_reply"]
         assert all(state["evidence"][key] == value for key, value in before["evidence"].items())
         assert set(state["queries"]) == {"policy_000000001", "booking_00000001"}
@@ -310,28 +303,6 @@ def test_reservations_migration_preserves_existing_fixture_rows(store):
         assert "2026-11-10" not in schema
 
 
-def test_migrate_confirmed_requests_preserves_identity_and_claims(store):
-    row = store.reserve("thread", "request", DRAFT, "Intent")
-    store.claim_review(row["reservation_id"], "approve")
-    store.review_dispatched(row["reservation_id"], "existing-run")
-    with sqlite3.connect(store.path) as db:
-        # Recreate the previous application's schema and one confirmed row.
-        schema = db.execute("SELECT sql FROM sqlite_master WHERE name='booking_requests'").fetchone()[0]
-        db.execute(schema.replace("booking_requests", "old_requests", 1).replace("'approved'", "'confirmed'"))
-        db.execute("INSERT INTO old_requests SELECT * FROM booking_requests")
-        db.execute("UPDATE old_requests SET status='confirmed'")
-        db.execute("DROP TABLE booking_requests")
-        db.execute("ALTER TABLE old_requests RENAME TO booking_requests")
-        db.execute("ALTER TABLE booking_requests DROP COLUMN decision_reason")
-    migrated = store.get(row["reservation_id"])
-    assert migrated["status"] == "approved"
-    assert migrated["draft"] == row["draft"] and migrated["summary"] == row["summary"]
-    assert migrated["review_text"] == "approve" and migrated["review_run_id"] == "existing-run"
-    assert store.get(row["reservation_id"]) == migrated
-    with pytest.raises(ValueError, match="slot_unavailable"):
-        store.reserve("another", "request", DRAFT, "Intent")
-
-
 async def test_summary_runs_after_pending_write_and_receives_no_pii(store):
     from langgraph.checkpoint.memory import InMemorySaver
 
@@ -362,106 +333,6 @@ async def test_summary_runs_after_pending_write_and_receives_no_pii(store):
     assert "__interrupt__" not in output and "approved" in output["final_reply"]
 
 
-@pytest.fixture
-def admin_api(store, tmp_path):
-    thread = str(uuid4())
-    sdk = SimpleNamespace(
-        threads=SimpleNamespace(create=AsyncMock(return_value={"thread_id": thread}), get_state=AsyncMock()),
-        runs=SimpleNamespace(create=AsyncMock(return_value={"run_id": "initial"}),
-            get=AsyncMock(return_value={"status": "pending"}), list=AsyncMock(return_value=[]), join=AsyncMock()))
-    settings = Settings(checkpoint_path=tmp_path / "checkpoint.db", application_path=tmp_path / "registry.db",
-                        booking_path=store.path)
-    app = create_app(settings, sdk)
-    with TestClient(app, raise_server_exceptions=False) as client:
-        client.post("/api/threads")
-        client.post("/api/chat", json={"thread_id": thread, "request_id": "booking_00000001", "message": "Book"})
-        row = store.reserve(thread, "booking_00000001", DRAFT, "Request this spot")
-        sdk.threads.get_state.return_value = {"next": ["admin"], "values": {
-            "reservation_id": row["reservation_id"], "request_id": row["request_id"],
-            "evidence": {"SECRET": "PRIVATE"}}, "tasks": [{"name": "admin", "interrupts": [{"value": {
-                "kind": "admin_approval", "reservation_id": row["reservation_id"]}}]}]}
-        sdk.runs.get.return_value = {"status": "interrupted"}
-        sdk.runs.create.reset_mock()
-        sdk.runs.create.return_value = {"run_id": "continuation"}
-        yield client, sdk, app, row
-
-
-def test_customer_poll_recovers_old_admin_interrupt_once_and_returns_final_dto(admin_api):
-    client, sdk, app, row = admin_api
-    response = client.get(f"/api/threads/{row['thread_id']}/requests/{row['request_id']}")
-    assert response.json()["status"] == "pending" and not response.json()["retryable"]
-    assert "PRIVATE" not in response.text
-    listed = client.get("/api/admin/reservations").json()
-    assert listed["reservations"][0]["reservation_id"] == row["reservation_id"]
-    assert "PRIVATE_PLATE" not in json.dumps(listed)
-    url = f"/api/admin/reservations/{row['reservation_id']}/resume"
-    assert client.post(url).status_code == 202
-    assert client.post(url).status_code == 202
-    assert client.post(f"/api/admin/reservations/{row['reservation_id']}/review", json={"response": "approve"}).status_code == 404
-    assert sdk.runs.create.await_count == 1
-    command = sdk.runs.create.call_args.kwargs["command"]
-    assert command == {"resume": {"reservation_id": row["reservation_id"]}}
-    sdk.runs.get.return_value = {"status": "success"}
-    sdk.threads.get_state.return_value = {"next": [], "values": {
-        "request_id": row["request_id"], "final_reply": "Approved.", "reservation_state": {},
-        "admin_response": "PRIVATE", "booking_draft": DRAFT}}
-    result = client.get(f"/api/threads/{row['thread_id']}/requests/{row['request_id']}")
-    assert result.json()["status"] == "completed" and "PRIVATE" not in result.text
-
-
-def test_admin_lost_ack_reconciles_without_second_resume(admin_api):
-    client, sdk, app, row = admin_api
-    sdk.runs.create.side_effect = TimeoutError()
-    url = f"/api/threads/{row['thread_id']}/requests/{row['request_id']}"
-    assert client.get(url).status_code == 503
-    sdk.runs.list.return_value = [{"run_id": "lost-ack-run", "metadata": {"admin_review_id": row["reservation_id"]}}]
-    # A new API adapter reconnects using durable claims, not in-memory flags.
-    from parking.api.admin import AdminGateway
-    app.state.gateway.admin = AdminGateway(sdk, app.state.gateway.admin.store, app.state.gateway.submissions)
-    result = client.get(url)
-    assert result.status_code == 202 and result.json()["status"] == "pending"
-    assert app.state.gateway.admin.store.get(row["reservation_id"])["dispatch_status"] == "accepted"
-    assert sdk.runs.create.await_count == 1
-
-
-def test_resume_rejects_wrong_checkpoint_and_cross_origin(admin_api):
-    client, sdk, app, row = admin_api
-    sdk.threads.get_state.return_value = {"next": [], "values": {}}
-    url = f"/api/admin/reservations/{row['reservation_id']}/resume"
-    assert client.post(url).status_code == 409
-    assert client.post(url, headers={"Origin": "https://foreign.example"}).status_code == 403
-    sdk.runs.create.assert_not_awaited()
-
-
-def test_customer_poll_cannot_resume_a_request_from_another_thread(admin_api):
-    client, sdk, app, row = admin_api
-    with sqlite3.connect(app.state.gateway.admin.store.path) as db:
-        db.execute("UPDATE booking_requests SET thread_id=? WHERE reservation_id=?",
-                   (str(uuid4()), row["reservation_id"]))
-    result = client.get(f"/api/threads/{row['thread_id']}/requests/{row['request_id']}")
-    assert result.status_code == 503 and "PRIVATE" not in result.text
-    sdk.runs.create.assert_not_awaited()
-
-
-async def test_concurrent_legacy_recovery_dispatches_only_once(admin_api):
-    client, sdk, app, row = admin_api
-    gateway = app.state.gateway.admin
-    await asyncio.gather(gateway.reconcile(row), gateway.reconcile(row))
-    assert sdk.runs.create.await_count == 1
-    assert gateway.store.get(row["reservation_id"])["review_run_id"] == "continuation"
-
-
-def test_unknown_legacy_resume_acceptance_stays_pending_without_redispatch(admin_api):
-    client, sdk, app, row = admin_api
-    sdk.runs.create.side_effect = TimeoutError()
-    url = f"/api/threads/{row['thread_id']}/requests/{row['request_id']}"
-    assert client.get(url).status_code == 503
-    result = client.get(url)
-    assert result.status_code == 202 and result.json()["status"] == "pending"
-    assert sdk.runs.create.await_count == 1
-    assert app.state.gateway.admin.store.get(row["reservation_id"])["dispatch_status"] == "creating"
-
-
 @pytest.mark.parametrize("approved", [True, False])
 async def test_automatic_admin_replay_uses_durable_result_without_another_llm_decision(store, approved):
     row = store.reserve("thread", "request", DRAFT, "Request CTR-001 08:00-10:00")
@@ -472,47 +343,3 @@ async def test_automatic_admin_replay_uses_durable_result_without_another_llm_de
         "reservation_summary": row["summary"]})
     assert result["admin_result"]["status"] == final["status"]
     assert model.calls["review"] == 0
-
-
-async def test_upgrade_resumes_real_old_nested_interrupt_without_recreating_request(store, tmp_path, monkeypatch):
-    from langgraph.graph import END, START, StateGraph
-    from langgraph.types import interrupt
-    from parking.graph.schemas import AdminInput, AdminOutput, AdminState
-
-    def old_admin_graph(model_factory, booking_store):
-        def await_review(state):
-            interrupt({"kind": "admin_approval", "reservation_id": state["reservation_id"],
-                       "summary": state["reservation_summary"]})
-            return {}
-        old = StateGraph(AdminState, input_schema=AdminInput, output_schema=AdminOutput)
-        old.add_node("await_review", await_review)
-        old.add_edge(START, "await_review")
-        old.add_edge("await_review", END)
-        return old
-
-    model = BookingModel()
-    checkpoint = str(tmp_path / "upgrade.sqlite3")
-    config = {"configurable": {"thread_id": "legacy-thread"}}
-    with monkeypatch.context() as patch:
-        patch.setattr("parking.graph.graph.build_admin_graph", old_admin_graph)
-        async with AsyncSqliteSaver.from_conn_string(checkpoint) as saver:
-            old = build_graph(lambda: model, checkpointer=saver, booking_store=store)
-            result = await old.ainvoke({"message": "Book my spot", "request_id": "legacy_request01"}, config)
-            assert result["__interrupt__"] and model.calls["review"] == 0
-            before = (await old.aget_state(config)).values
-            reservation_id = before["reservation_id"]
-            assert store.get(reservation_id)["status"] == "pending"
-    async with AsyncSqliteSaver.from_conn_string(checkpoint) as saver:
-        upgraded = build_graph(lambda: model, checkpointer=saver, booking_store=store)
-        result = await upgraded.ainvoke(Command(resume={"reservation_id": reservation_id}), config)
-        assert "__interrupt__" not in result and "approved" in result["final_reply"]
-        assert store.get(reservation_id)["status"] == "approved"
-        assert model.calls["draft"] == model.calls["review"] == 1
-        after = (await upgraded.aget_state(config)).values
-        assert after["queries"] == before["queries"] and after["evidence"] == before["evidence"]
-        assert "Private" not in json.dumps(result)
-        await upgraded.ainvoke(None, config)
-        assert model.calls["review"] == 1
-    with sqlite3.connect(store.path) as db:
-        assert db.execute("SELECT count(*) FROM booking_requests").fetchone()[0] == 1
-        assert db.execute("SELECT count(*) FROM reservations WHERE reservation_id=?", (reservation_id,)).fetchone()[0] == 1

@@ -32,25 +32,16 @@ class BookingStore:
                     start_time TEXT NOT NULL, end_time TEXT NOT NULL,
                     draft TEXT NOT NULL, summary TEXT NOT NULL,
                     status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected')),
-                    review_text TEXT, dispatch_status TEXT, review_run_id TEXT,
                     decision_reason TEXT,
                     UNIQUE(thread_id, request_id),
                     FOREIGN KEY(spot_id, slot_date) REFERENCES transport_slots(spot_id, slot_date)
                 )""")
-                # Preserve all prior requests and dispatch claims while changing
-                # only the application's status vocabulary, never legacy fixtures.
-                schema = db.execute("SELECT sql FROM sqlite_master WHERE name='booking_requests'").fetchone()[0]
-                if "'confirmed'" in schema:
-                    db.execute(schema.replace("booking_requests", "booking_requests_migrated", 1)
-                               .replace("'confirmed'", "'approved'"))
-                    columns = [row[1] for row in db.execute("PRAGMA table_info(booking_requests)")]
-                    projection = ["CASE WHEN status='confirmed' THEN 'approved' ELSE status END"
-                                  if column == "status" else column for column in columns]
-                    db.execute(f"INSERT INTO booking_requests_migrated ({','.join(columns)}) "
-                               f"SELECT {','.join(projection)} FROM booking_requests")
-                    db.execute("DROP TABLE booking_requests")
-                    db.execute("ALTER TABLE booking_requests_migrated RENAME TO booking_requests")
-                if "decision_reason" not in {row[1] for row in db.execute("PRAGMA table_info(booking_requests)")}:
+                columns = {row[1] for row in db.execute("PRAGMA table_info(booking_requests)")}
+                # Admin decisions now run in the graph; HTTP resume bookkeeping is obsolete.
+                for column in ("review_text", "dispatch_status", "review_run_id"):
+                    if column in columns:
+                        db.execute(f"ALTER TABLE booking_requests DROP COLUMN {column}")
+                if "decision_reason" not in columns:
                     db.execute("ALTER TABLE booking_requests ADD COLUMN decision_reason TEXT")
                 self._migrate_reservations_date_range(db)
             yield db
@@ -221,7 +212,7 @@ class BookingStore:
     def pending(self):
         with self.connection() as db:
             rows = db.execute("""SELECT reservation_id,thread_id,request_id,spot_id,start_time,end_time,
-                summary,status,dispatch_status FROM booking_requests WHERE status='pending'
+                summary,status FROM booking_requests WHERE status='pending'
                 ORDER BY rowid""").fetchall()
         return [dict(row) for row in rows]
 
@@ -261,24 +252,3 @@ class BookingStore:
             db.execute("UPDATE booking_requests SET status=?,decision_reason=? WHERE reservation_id=?",
                        (target, reason, reservation_id))
             return dict(db.execute("SELECT * FROM booking_requests WHERE reservation_id=?", (reservation_id,)).fetchone())
-
-    def claim_review(self, reservation_id, response):
-        with self.connection() as db, db:
-            db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT * FROM booking_requests WHERE reservation_id=?", (reservation_id,)).fetchone()
-            if not row:
-                raise NotFound()
-            if row["review_text"] is not None:
-                if row["review_text"] != response:
-                    raise Conflict()
-                return False
-            if row["status"] != "pending":
-                raise Conflict()
-            db.execute("UPDATE booking_requests SET review_text=?,dispatch_status='creating' WHERE reservation_id=?",
-                       (response, reservation_id))
-            return True
-
-    def review_dispatched(self, reservation_id, run_id):
-        with self.connection() as db, db:
-            db.execute("UPDATE booking_requests SET dispatch_status='accepted',review_run_id=? WHERE reservation_id=?",
-                       (run_id, reservation_id))

@@ -140,12 +140,4 @@ def create_app(settings=None, client=None):
                 messages.append({"role": "assistant", "text": output.final_reply, "request_id": row["request_id"]})
         return {"thread_id": thread_id, "messages": messages}
 
-    @app.get("/api/admin/reservations")
-    async def pending_reservations():
-        return {"reservations": gateway.admin.store.pending()}
-
-    @app.post("/api/admin/reservations/{reservation_id}/resume", status_code=202)
-    async def resume_reservation(reservation_id: Handle):
-        return await gateway.admin.resume(reservation_id)
-
     return app
