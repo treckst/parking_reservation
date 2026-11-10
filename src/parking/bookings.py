@@ -1,7 +1,7 @@
 """Pending slot holds alongside immutable legacy fixtures in the same SQLite file."""
 
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 import json
 from pathlib import Path
 import sqlite3
@@ -85,6 +85,61 @@ class BookingStore:
                 (reservation_id, thread_id, request_id, draft["spot_id"], start.date().isoformat(),
                  draft["start"], draft["end"], payload, summary))
             return dict(db.execute("SELECT * FROM booking_requests WHERE reservation_id=?", (reservation_id,)).fetchone())
+
+    def find_slots(self, facility, *, slot_date=None, start=None, end=None,
+                   duration_hours=None, spot_id=None, limit=3):
+        """Return only public, facility-scoped candidates; times enable availability checks."""
+        facility = facility.upper()
+        if facility not in ("CTR", "RIV", "STA", "AIR"):
+            raise ValueError("Choose a parking location")
+        if not 1 <= limit <= 12:
+            raise ValueError("Invalid result limit")
+        if slot_date is not None:
+            slot_date = date.fromisoformat(slot_date).isoformat()
+        interval = bool(start and end)
+        if interval:
+            times = ReservationDraft(start=start, end=end)
+            start, end = (datetime.fromisoformat(value) for value in (times.start, times.end))
+            if start.date() != end.date() or start >= end:
+                raise ValueError("invalid_interval")
+            if slot_date and slot_date != start.date().isoformat():
+                raise ValueError("Date does not match interval")
+            slot_date = start.date().isoformat()
+            duration_hours = (end - start).total_seconds() / 3600
+        if duration_hours is not None and not 0 < duration_hours <= 24:
+            raise ValueError("Invalid duration")
+        # SQLite has no ILIKE. COLLATE NOCASE + LIKE with bound, validated
+        # prefixes is its equivalent here; no caller can supply SQL/wildcards.
+        filters = ["s.spot_id COLLATE NOCASE LIKE ?"]
+        values = [facility + "-%"]
+        if slot_date:
+            filters.append("s.slot_date = ?")
+            values.append(slot_date)
+        if spot_id:
+            filters.append("s.spot_id = ? COLLATE NOCASE")
+            values.append(spot_id)
+        if interval:
+            filters.extend([
+                "? >= substr(s.working_hours,1,5) || ':00'",
+                "? <= substr(s.working_hours,7,5) || ':00'",
+                """NOT EXISTS (SELECT 1 FROM reservations r WHERE r.spot_id=s.spot_id
+                    AND r.status IN ('confirmed','active','completed')
+                    AND julianday(r.start_time) < julianday(?)
+                    AND julianday(r.end_time) > julianday(?))""",
+                """NOT EXISTS (SELECT 1 FROM booking_requests b WHERE b.spot_id=s.spot_id
+                    AND b.status IN ('pending','approved')
+                    AND julianday(b.start_time) < julianday(?)
+                    AND julianday(b.end_time) > julianday(?))""",
+            ])
+            values.extend([start.strftime("%H:%M:%S"), end.strftime("%H:%M:%S"),
+                           end.isoformat(), start.isoformat(), end.isoformat(), start.isoformat()])
+        with self.connection() as db:
+            rows = db.execute(f"""SELECT DISTINCT s.spot_id, s.type, s.hourly_price, s.working_hours
+                FROM transport_slots s WHERE {' AND '.join(filters)}
+                ORDER BY s.hourly_price, s.spot_id LIMIT ?""", [*values, limit]).fetchall()
+        return [{**dict(row), "slot_date": slot_date, "availability_checked": interval,
+                 "total_price": round(row["hourly_price"] * duration_hours, 2) if duration_hours else None,
+                 "currency": "PLN"} for row in rows]
 
     def validate_slot(self, db, draft, reservation_id):
         """Check hours and conflicts under the caller's SQLite write transaction."""
