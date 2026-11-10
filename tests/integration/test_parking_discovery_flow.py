@@ -7,7 +7,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from parking.graph.graph import build_graph
-from parking.graph.schemas import Intent, ReservationDates
+from parking.graph.schemas import Intent, ReservationExtraction
+from tests.extraction_helpers import temporal_patch, updates
 from tests.integration.test_admin_flow import BookingModel
 from tests.integration.test_reservation_collection import ScriptedModel
 from tests.integration.test_spot_lookup import slot_store
@@ -29,8 +30,9 @@ class DiscoveryModel(BookingModel):
                     return {"kind": "reservation", "language": "en", "facilities": [model.facility],
                         "retrieval_question": json.loads(messages[-1].content)["message"],
                         "explain_spot_id": model.explain, "lookup_only": model.lookup}
-                if schema is ReservationDates:
-                    return model.dates
+                if schema is ReservationExtraction:
+                    return {"updates": temporal_patch(model.dates)["updates"] + updates({key: value for key, value in model.draft.items()
+                        if key not in ("start", "end")})}
                 return await delegate.ainvoke(messages)
         return Structured()
 
@@ -57,7 +59,7 @@ async def test_evening_duration_options_explanation_restart_and_selection(slot_s
         assert "first name" not in text and "vehicle plate" not in text and "your spot ID" not in text
         assert "available:" not in text.lower() and len(text) < 350
         state = (await graph.aget_state(config)).values
-        assert state["parking_search"] == {"facility": "CTR", "slot_date": "2026-11-20", "duration_hours": 6}
+        assert state["parking_search"] == {"facility": "CTR", "slot_date": "2026-11-20", "duration_hours": 6, "spot_type": None}
         assert state["evidence"]["1:1"]["sql_results"][0]["filters"]["slot_date"] == "2026-11-20"
         first_evidence = state["evidence"]["1:1"]
 
@@ -116,13 +118,14 @@ async def test_lookup_cannot_submit_even_a_complete_draft(slot_store):
 
 
 async def test_tool_cannot_select_space_from_different_location(slot_store):
-    model = ScriptedModel([("update_reservation_draft", {"updates": {"spot_id": "AIR-001"}}),
+    model = ScriptedModel([("update_reservation_draft", {"updates": {"spot_id": "AIR-001", "name": "SavedName"}}),
                            ("ask_missing_reservation_details", {})])
     graph = build_graph(lambda: model, checkpointer=InMemorySaver(), booking_store=slot_store)
     config = {"configurable": {"thread_id": "scoped-choice"}}
     result = await graph.ainvoke({"message": "Book City Centre", "request_id": "choice_request001"}, config)
     assert model.tool_results[1].status == "error"
     assert not (await graph.aget_state(config)).values["booking_draft"].get("spot_id")
+    assert (await graph.aget_state(config)).values["booking_draft"]["name"] == "SavedName"
     assert "AIR-001" not in result["final_reply"] and not slot_store.pending()
 
 

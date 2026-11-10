@@ -87,7 +87,7 @@ class BookingStore:
             return dict(db.execute("SELECT * FROM booking_requests WHERE reservation_id=?", (reservation_id,)).fetchone())
 
     def find_slots(self, facility, *, slot_date=None, start=None, end=None,
-                   duration_hours=None, spot_id=None, limit=3):
+                   duration_hours=None, spot_id=None, spot_type=None, limit=3):
         """Return only public, facility-scoped candidates; times enable availability checks."""
         facility = facility.upper() if isinstance(facility, str) else ""
         if facility not in ("CTR", "RIV", "STA", "AIR"):
@@ -118,6 +118,11 @@ class BookingStore:
         # prefixes is its equivalent here; no caller can supply SQL/wildcards.
         filters = ["s.spot_id COLLATE NOCASE LIKE ?"]
         values = [facility + "-%"]
+        if spot_type is not None:
+            if spot_type not in ("standard", "electric", "accessible", "van"):
+                raise ValueError("Invalid space type")
+            filters.append("s.type = ?")
+            values.append(spot_type)
         if slot_date:
             filters.append("s.slot_date = ?")
             values.append(slot_date)

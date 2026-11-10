@@ -17,7 +17,8 @@ from parking.api.app import create_app
 from parking.api.sessions import Conflict
 from parking.bookings import BookingStore
 from parking.graph.graph import build_graph
-from parking.graph.schemas import AdminDecision, Intent, ReservationDates, ReservationDraft, ReservationSummary
+from parking.graph.schemas import AdminDecision, Intent, ReservationExtraction, ReservationDraft, ReservationSummary
+from tests.extraction_helpers import updates
 from parking.settings import Settings
 from tests.unit.test_policy_flow import DOCUMENT, Model
 
@@ -64,7 +65,8 @@ class BookingModel(Model):
                 if last.type == "human":
                     name = "inspect_reservation_draft"
                 elif last.name == "inspect_reservation_draft":
-                    name, args = "update_reservation_draft", {"updates": model.draft}
+                    name, args = "update_reservation_draft", {"updates": updates({key: value for key, value in model.draft.items()
+                        if key not in ("start", "end")})}
                     model.calls["draft"] += 1
                 else:
                     name = ("submit_reservation_draft" if json.loads(last.content)["ready"] else
@@ -87,10 +89,8 @@ class BookingModel(Model):
                 if schema is ReservationDraft:
                     model.calls["draft"] += 1
                     return model.draft
-                if schema is ReservationDates:
-                    fields = [key for key in ("start", "end") if key in model.draft]
-                    return {"start": model.draft.get("start"), "end": model.draft.get("end"),
-                            "provided_fields": fields, "clarification": None}
+                if schema is ReservationExtraction:
+                    return {"updates": updates(model.extraction_draft if hasattr(model, "extraction_draft") else model.draft)}
                 if schema is ReservationSummary:
                     return {"summary": "Request CTR-001 on November 20, 08:00-10:00."}
                 if schema is AdminDecision:

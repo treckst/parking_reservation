@@ -38,6 +38,7 @@ def build_graph(model_factory=create_llm, retriever=retrieve, *, checkpointer=No
     def booking_reply(state):
         if state.get("booking_error"):
             if (draft_snapshot(state.get("booking_draft", {}))["missing_fields"] or
+                    state.get("field_errors") or
                     state.get("intent", {}).get("lookup_only") or state.get("intent", {}).get("explain_spot_id")):
                 text = reservation_question(state)
             elif state["booking_error"] == "not_submitted":

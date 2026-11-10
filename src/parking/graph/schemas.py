@@ -32,6 +32,9 @@ class BookingDetails(StrictModel):
     spot_id: str | None = None
     start: str | None = None
     end: str | None = None
+    slot_date: str | None = None
+    duration_hours: float | None = None
+    spot_type: Literal["standard", "electric", "accessible", "van"] | None = None
 
 
 class GraphOutput(StrictModel):
@@ -135,6 +138,7 @@ class MainState(TypedDict, total=False):
     parking_search: dict
     parking_options: list[dict]
     date_clarification: str | None
+    field_errors: dict[str, str]
 
 
 class ReservationDraft(StrictModel):
@@ -159,21 +163,30 @@ class ReservationDraft(StrictModel):
         return local.isoformat()
 
 
-class ReservationDates(StrictModel):
-    """Separate extraction boundary: null and an absent field have different meanings."""
+class ReservationFieldUpdate(StrictModel):
+    field: Literal["facility", "spot_type", "spot_id", "slot_date", "start", "end",
+                   "duration_hours", "name", "surname", "car_number"]
+    operation: Literal["set", "clear", "clarify"]
+    value: str | None
 
-    start: str | None = None
-    end: str | None = None
-    slot_date: str | None = None
-    duration_hours: float | None = Field(default=None, gt=0, le=24)
-    provided_fields: list[Literal["start", "end", "slot_date", "duration_hours"]] = Field(default_factory=list)
-    clarification: str | None = None
+
+class ReservationExtraction(StrictModel):
+    """Only touched fields appear; null never implicitly clears another field."""
+
+    updates: list[ReservationFieldUpdate] = Field(default_factory=list, max_length=20)
+
+
+class DraftFieldUpdate(StrictModel):
+    field: Literal["spot_id", "name", "surname", "car_number"]
+    operation: Literal["set", "clear"]
+    value: str | None
 
 
 class ParkingSearch(StrictModel):
     facility: Literal["CTR", "RIV", "STA", "AIR"] | None = None
     slot_date: str | None = None
     duration_hours: float | None = Field(default=None, gt=0, le=24)
+    spot_type: Literal["standard", "electric", "accessible", "van"] | None = None
 
     @field_validator("slot_date")
     @classmethod
@@ -217,6 +230,7 @@ class ReservationOutput(TypedDict):
     parking_options: list[dict]
     date_clarification: str | None
     evidence: Annotated[dict, merge_evidence]
+    field_errors: dict[str, str]
 
 
 class AdminOutput(TypedDict):

@@ -49,6 +49,13 @@ def test_date_filter_does_not_include_later_days_and_no_date_deduplicates(slot_s
     assert not any(row["availability_checked"] for row in partial)
 
 
+def test_type_filter_matches_requested_type_without_broadening_place_or_date(slot_store):
+    assert not slot_store.find_slots("AIR", slot_date="2026-11-20", spot_type="van")
+    rows = slot_store.find_slots("AIR", slot_date="2026-11-22", spot_type="van")
+    assert [row["spot_id"] for row in rows] == ["AIR-999"]
+    assert all(row["type"] == "standard" for row in slot_store.find_slots("AIR", spot_type="standard"))
+
+
 @pytest.mark.parametrize("facility", ["", "%", "CTR%' OR 1=1 --", "CITY", "AIR_%"])
 def test_invalid_prefix_cannot_broaden_query(slot_store, facility):
     with pytest.raises(ValueError):

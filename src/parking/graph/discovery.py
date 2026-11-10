@@ -5,6 +5,7 @@ from datetime import date, datetime
 
 from parking.graph.collection import draft_snapshot, missing_details_question, public_details
 from parking.graph.schemas import ParkingSearch
+from parking.graph.fields import SEARCH_FIELDS
 
 
 FACILITIES = {"CTR": "City Centre", "RIV": "Riverside", "STA": "Station", "AIR": "Airport"}
@@ -44,8 +45,8 @@ class ParkingDiscovery:
                 draft["spot_id"] = None
         return {"parking_options": spots,
                 "booking_draft": draft,
-                "parking_search": {key: filters[key] for key in ("facility", "slot_date", "duration_hours")},
-                "reservation_state": public_details(draft_snapshot(draft)["draft"], [filters["facility"]])}
+                "parking_search": {key: filters[key] for key in SEARCH_FIELDS},
+                "reservation_state": public_details(draft_snapshot(draft)["draft"], [filters["facility"]], filters)}
 
     def record(self, state):
         filters = search_filters(state, spot_id=state.get("booking_draft", {}).get("spot_id"))
@@ -87,12 +88,19 @@ def reservation_question(state):
         entries.append(f"{', '.join(identities)} ({kind}) — {price}")
     checked = all(spot["availability_checked"] for spot in display)
     when = ", " + date.fromisoformat(search.slot_date).strftime("%d %b %Y") if search.slot_date else ""
+    if draft.get("start") or draft.get("end"):
+        when += " " + (draft["start"][11:16] if draft.get("start") else "?") + "–" + (draft["end"][11:16] if draft.get("end") else "?")
     label = "available" if checked else "spaces"
     quote = f"{FACILITIES[search.facility]}{when} — {label}: " + "; ".join(entries) + "."
     if not checked:
         quote += " Availability needs exact times."
 
-    if not search.slot_date:
+    errors = state.get("field_errors", {})
+    if errors:
+        question = next(iter(errors.values()))
+        if next(iter(errors)) == "start":
+            question += f" Hours: {display[0]['working_hours']}."
+    elif not search.slot_date:
         question = "Please provide a date, start time and duration."
     elif "start" in missing:
         duration = f" for your {search.duration_hours:g}-hour stay" if search.duration_hours else ""

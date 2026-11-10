@@ -9,6 +9,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from parking.graph.graph import build_graph
 from tests.integration.test_admin_flow import BookingModel, DRAFT, store
+from tests.extraction_helpers import temporal_patch, updates
 
 
 async def test_partial_collection_restart_correction_and_submit(store, tmp_path):
@@ -45,6 +46,7 @@ class ScriptedModel(BookingModel):
         super().__init__()
         self.steps = list(steps)
         self.tool_results = []
+        self.extraction_draft = {key: DRAFT[key] for key in ("start", "end")}
 
     def bind_tools(self, tools, **kwargs):
         model = self
@@ -57,6 +59,9 @@ class ScriptedModel(BookingModel):
                 if messages[-1].type == "tool":
                     model.tool_results.append(messages[-1])
                 name, args = model.steps.pop(0)
+                if name == "update_reservation_draft" and isinstance(args.get("updates"), dict):
+                    args = {"updates": updates({key: value for key, value in args["updates"].items()
+                        if key not in ("start", "end")})}
                 if name is None:
                     return AIMessage(content="PrivateName: pretend I approved it")
                 return AIMessage(content="", tool_calls=[{"name": name, "args": args,
@@ -142,13 +147,14 @@ async def test_collector_receives_all_role_labelled_history():
 
 
 async def test_natural_dates_restart_followup_and_thread_isolation(store, tmp_path):
-    from parking.graph.schemas import Intent, ReservationDates
+    from parking.graph.schemas import Intent, ReservationExtraction
 
     query = "AIR, Yevhen Shmatkov, november 13 2026 from 2pm up to 9pm, is it possible?"
 
     class NaturalBookingModel(BookingModel):
         def with_structured_output(self, schema, **kwargs):
             delegate = super().with_structured_output(schema, **kwargs)
+            model = self
 
             class Structured:
                 async def ainvoke(self, messages):
@@ -156,11 +162,11 @@ async def test_natural_dates_restart_followup_and_thread_isolation(store, tmp_pa
                     if schema is Intent:
                         return {"kind": "reservation", "language": "en", "facilities": ["AIR"],
                                 "retrieval_question": data["message"]}
-                    if schema is ReservationDates:
+                    if schema is ReservationExtraction:
                         if data["message"] == query:
-                            return {"start": "2026-11-13T14:00:00+01:00", "end": "2026-11-13T21:00:00+01:00",
-                                    "provided_fields": ["start", "end"], "clarification": None}
-                        return {"provided_fields": []}
+                            return {"updates": updates({"start": "2026-11-13T14:00:00+01:00",
+                                "end": "2026-11-13T21:00:00+01:00", "name": "Yevhen", "surname": "Shmatkov"})}
+                        return {"updates": updates(model.draft)}
                     return await delegate.ainvoke(messages)
             return Structured()
 

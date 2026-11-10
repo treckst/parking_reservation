@@ -48,7 +48,7 @@ async def test_help_is_assistance_without_retrieval_or_booking(message):
     assert not state.get("booking_draft") and not state.get("reservation_id")
     assert not state.get("evidence")
     assert len(state["messages"]) == 2
-    assert model.calls["EvidenceAssessment"] == model.calls["ReservationDates"] == 0
+    assert model.calls["EvidenceAssessment"] == model.calls["ReservationExtraction"] == 0
 
 
 async def test_help_continues_missing_details_and_preserves_evidence():

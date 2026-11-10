@@ -30,18 +30,29 @@ LLM call; inspection is not optional model behavior. Policy evidence and admin
 tool history are separate channels, not customer conversation messages. Policy
 answer generation receives current retrieved evidence rather than the entire chat.
 
-A separate `ReservationDates` structured-output step normalizes natural-language
-dates before collection, using the current Europe/Warsaw time for relative dates
-and the correct seasonal offset. Customers can write "November 13, 2026 from 2pm
-to 9pm". Unspecified fields survive corrections; ambiguous dates require a
-follow-up. Draft tools cannot overwrite normalized dates. Search preferences retain
-the date and duration even when a phrase such as "six hours in the evening" needs
-an exact start time. A start-only answer then completes the interval using that duration.
+A mandatory `ReservationExtraction` structured-output step runs before SQL and
+collection. It saves each supplied field independently through explicit `set`,
+`clear`, or `clarify` operations; omitted fields survive. Invalid/ambiguous values
+block only their field and cannot erase valid siblings. Draft tools use the same
+explicit patch semantics for names, plates and space selection. Inspection and
+pending-write readiness both check unresolved field errors as well as required
+values; unresolved fields cannot produce a pending booking.
+
+Dates use Europe/Warsaw time and the correct seasonal offset. An omitted year
+uses the existing visit year or the next occurrence of a named month/day from the
+reference date. For example, on November 10, 2026, "24th of November, 3pm up to
+20:00" becomes November 24, 2026, 15:00-20:00. Only unresolved fields trigger a
+follow-up. Date-only changes preserve/rebase known local times; start-only changes
+preserve known ends. A date and duration survive vague phrases such as "six hours
+in the evening"; a later start time completes the interval. The public state
+includes date, duration and requested space type alongside start/end and space ID,
+with personal fields kept in the private draft.
 
 Before collecting personal details, reservation, availability and parking-price
 requests query SQLite for up to three matching spaces and their PLN hourly and
 whole-stay costs. The location is always bound as a prefix (`CTR-%`, `AIR-%`, etc.)
-using SQLite case-insensitive LIKE, with `slot_date = ?` whenever a date is known.
+using SQLite case-insensitive LIKE, with `slot_date = ?` whenever a date is known
+and `type = ?` whenever the customer supplied a space type.
 A date-only query offers candidates and rates, explicitly requiring exact times
 before availability is known. Complete intervals check operating hours and
 exclude overlaps with legacy bookings and pending/approved holds; the seed's

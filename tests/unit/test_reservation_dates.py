@@ -9,7 +9,8 @@ from pydantic import ValidationError
 
 from parking.graph.collection import draft_snapshot
 from parking.graph.dates import DateNormalizer
-from parking.graph.schemas import ReservationDates, ReservationDraft
+from parking.graph.schemas import ReservationExtraction, ReservationDraft
+from tests.extraction_helpers import temporal_patch
 
 
 class DateModel:
@@ -18,13 +19,13 @@ class DateModel:
         self.payload = None
 
     def with_structured_output(self, schema, **kwargs):
-        assert schema is ReservationDates
+        assert schema is ReservationExtraction
         assert kwargs == {"method": "json_schema", "strict": True}
         return self
 
     async def ainvoke(self, messages):
         self.payload = json.loads(messages[-1].content)
-        return self.result
+        return self.result if "updates" in self.result else temporal_patch(self.result)
 
 
 @pytest.mark.parametrize("query,start,end", [
@@ -91,7 +92,7 @@ async def test_date_duration_survive_vague_evening_then_start_time_completes_int
     first = await DateNormalizer(lambda: model).normalize({
         "message": "6 hours in the evening on November 20 2026 at city centre",
         "intent": {"facilities": ["CTR"]}})
-    assert first["parking_search"] == {"facility": "CTR", "slot_date": "2026-11-20", "duration_hours": 6}
+    assert first["parking_search"] == {"facility": "CTR", "slot_date": "2026-11-20", "duration_hours": 6, "spot_type": None}
     assert not first["booking_draft"].get("start")
     model.result = {"start": "2026-11-20T16:00:00+01:00", "provided_fields": ["start"]}
     second = await DateNormalizer(lambda: model).normalize({**first, "message": "4pm"})
@@ -105,5 +106,5 @@ async def test_location_change_clears_old_spot_but_preserves_date_duration():
     result = await DateNormalizer(lambda: model).normalize({"message": "Airport instead",
         "intent": {"facilities": ["AIR"]}, "booking_draft": {"spot_id": "CTR-001"},
         "parking_search": {"facility": "CTR", "slot_date": "2026-11-20", "duration_hours": 6}})
-    assert result["parking_search"] == {"facility": "AIR", "slot_date": "2026-11-20", "duration_hours": 6}
+    assert result["parking_search"] == {"facility": "AIR", "slot_date": "2026-11-20", "duration_hours": 6, "spot_type": None}
     assert result["booking_draft"]["spot_id"] is None
