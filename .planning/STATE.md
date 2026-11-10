@@ -1,6 +1,13 @@
 ---
-gsd_state_version: '1.0'
+gsd_state_version: "1.0"
+current_phase: 1
+current_phase_name: Persistent Grounded Policy Chat
 status: planning
+stopped_at: "Phase 1 context gathered; next: $gsd-plan-phase 1"
+last_updated: "2026-11-10T08:32:54.067Z"
+last_activity: 2026-11-10
+last_activity_desc: Phase 1 context and discussion log saved and committed; no plans or implementation completed.
+state_head: 6fb1e8f7408e0b19d2f32a575630997523a7745c
 progress:
   total_phases: 4
   completed_phases: 0
@@ -16,7 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-10)
 
 **Core value:** Customers can request a valid parking reservation through conversation, with accurate availability, no overlapping bookings, administrator approval, and no disclosure of other customers' personal details.
-**Current focus:** Phase 1 — Persistent Grounded Policy Chat; ready for discussion and planning.
+**Current focus:** Phase 1 - Persistent Grounded Policy Chat; discussion complete and ready for planning.
 
 ## Current Position
 
@@ -24,7 +31,7 @@ Phase: 1 of 4 (Persistent Grounded Policy Chat)
 Plan: None — phase plans TBD
 Status: Ready to plan
 Roadmap: APPROVED by the user on 2026-11-10
-Last activity: 2026-11-10 — User approved the four-phase Vertical MVP roadmap; project initialization complete with all 49 requirements mapped and no implementation completed.
+Last activity: 2026-11-10 - Phase 1 context and discussion log saved and committed; no plans or implementation completed.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -56,6 +63,7 @@ Full decisions are recorded in PROJECT.md and REQUIREMENTS.md.
 - Build/start the Agent Server image before FastAPI SDK chat integration; verify prerequisites in Phase 1.
 - Preserve SQLite records; migrations and transactional booking correctness precede customer writes.
 - Local trusted demo only; no accounts/API keys, public deployment, payments, automatic expiry, extra agent frameworks, or model substitution.
+- [Phase 01]: Phase 1 context locks separate SQLite SqliteSaver with an outside-graph local connection, no runtime-context connection, one silent semantic-query retry, and per-tab browser continuity; see .planning/phases/01-persistent-grounded-policy-chat/01-CONTEXT.md.
 
 ### Pending Todos
 
@@ -77,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-10 (Europe/Warsaw)
-Stopped at: Project initialized; roadmap approved and requirements coverage 49/49. Next: $gsd-discuss-phase 1. No plans or implementation completed.
-Resume file: None
+Last session: 2026-11-10T08:32:54.033Z
+Stopped at: Phase 1 context gathered; next: $gsd-plan-phase 1
+Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-CONTEXT.md
