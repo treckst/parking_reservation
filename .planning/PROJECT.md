@@ -26,7 +26,7 @@ Existing capabilities inferred from the codebase map and read-only database insp
 
 #### Stateful conversational graph
 
-- [ ] Use LangChain and LangGraph as the only agent frameworks, with `gpt-6-luna` as the requested application LLM. Verify the provider model identifier and account availability during implementation; keep the setting configurable and do not silently substitute another model.
+- [ ] Use LangChain and LangGraph as the only agent frameworks. Create the LLM directly with `llm = ChatOpenAI(model="gpt-6-luna")`; no provider identifier or live authentication preflight is required.
 - [ ] Define explicit graph input and output schemas, a typed main state, and structured schemas for intent classification, evidence assessment, and booking details.
 - [ ] Maintain short-term conversation and booking memory within `thread_id`, with persistence suitable for the deployed graph server.
 - [ ] Keep retrieved evidence per query index within each thread. A custom reducer must merge vector documents and SQL results for the same query while preserving previous queries when a new message arrives.
@@ -67,7 +67,7 @@ Existing capabilities inferred from the codebase map and read-only database insp
 - [ ] Enforce Pydantic request/response schemas, appropriate HTTP status codes, configured CORS, and parameterized ORM queries.
 - [ ] Build Docker Compose orchestration for Chroma, the graph server, PostgreSQL, Redis, the application API, and the simple frontend as needed.
 - [ ] Require Chroma readiness before the graph server starts. Configure PostgreSQL and Redis readiness dependencies, persistent storage, and service addresses suitable for containers.
-- [ ] Keep SQLite as the booking database and PostgreSQL as graph-server persistence. Both the graph booking tools and REST administration endpoints must use the same booking data and transaction rules.
+- [ ] Keep SQLite as the booking database and a separate SQLite database with exact `SqliteSaver` for conversation checkpoints. Own its connection outside the graph in a local variable/closure, never runtime context. PostgreSQL/Redis support graph-server infrastructure. Both the graph booking tools and REST administration endpoints must use the same booking data and transaction rules.
 - [ ] Document repeatable local setup, image build, startup, configuration, and verification steps without committing credentials.
 
 #### Simple interactive frontend
@@ -85,7 +85,7 @@ Existing capabilities inferred from the codebase map and read-only database insp
 - [ ] Test REST endpoint behavior, request/response validation, error status codes, SDK integration, and customer/admin response boundaries.
 - [ ] Test vector retrieval accuracy with representative questions and expected policy sources, plus the judge's no-information behavior and parallel retrieval routing.
 - [ ] Test multi-turn slot filling, thread isolation, per-query reducer retention/merging, and prompt-injection/PII guardrails.
-- [ ] Verify the deployed graph, API, and frontend work together against the Docker services; distinguish deterministic tests from any explicitly configured live-model evaluation.
+- [ ] Verify the deployed graph, API, and frontend work together against the Docker services. Mock OpenAI calls in automated tests so they run without provider credentials or live API requests; do not enforce live provider preflight checks.
 
 ### Out of Scope
 
@@ -107,14 +107,14 @@ Existing capabilities inferred from the codebase map and read-only database insp
 - Daily slot identity is `(spot_id, slot_date)`. Facility prefixes are CTR, RIV, STA, and AIR; spot types are standard, electric, accessible, and van. Prices are PLN/hour and working hours are 06:00–22:00.
 - `current_availability` is a fixed November 9, 2026 noon snapshot, not an interval-availability guarantee. Live availability must derive from booking intervals and blocking statuses.
 - The Chroma `parking_documents` collection was inspected over HTTP after starting the existing service. It contains 36 pages from 12 PDF sources, with source/page metadata and 1,536-dimensional vectors.
-- Chroma collection metadata does not record the embedding model. The ingestion script leaves `OpenAIEmbeddings` at its library default; vector dimensions alone do not identify the model. Verify ingestion/query model compatibility before implementing retrieval.
+- Use embeddings directly with `embeddings = OpenAIEmbeddings(check_embedding_ctx_length=False)`, matching the ingestion script's library defaults. No embedding model override, provenance file, or provenance verification gate is required; preserve the existing Chroma collection.
 - PDFs and fixture people, plates, locations, and policies are fictional. The source corpus is effective for November 2026; answers and availability must respect data coverage instead of implying unlimited dates.
 - The local Python Chroma client failed to import because NumPy's C extensions could not load; direct HTTP inspection succeeded. Resolve or reproduce this environment issue during implementation setup.
 - Seed and ingestion scripts run at import time. Tests must not import them in a way that writes the real fixture or triggers embedding calls; introduce explicit entry points if helpers are reused.
 
 ### Workflow and behavior details to settle during phase planning
 
-- Verify the requested `gpt-6-luna` provider/model identifier and deployed service prerequisites; unavailable configuration must be reported clearly rather than silently falling back.
+- Use `ChatOpenAI(model="gpt-6-luna")` and `OpenAIEmbeddings(check_embedding_ctx_length=False)` directly. Test provider interactions with mocks and report runtime service errors safely; do not block implementation on live authentication or provenance checks.
 - Define plate normalization and supported formats for the supplied Polish-style fixtures, with clear validation messages.
 - Define date/time parsing and timezone behavior using Europe/Warsaw. Preserve the existing data's offset semantics and test boundary cases.
 - Define the selected interval/date used by the live slot grid, how occupied and pending states are derived, and behavior outside seeded inventory dates.
@@ -126,7 +126,8 @@ Existing capabilities inferred from the codebase map and read-only database insp
 ## Constraints
 
 - **Agent stack**: Use only LangChain and LangGraph for agent orchestration — explicit user requirement.
-- **Application LLM**: Use the requested `gpt-6-luna`, subject to verifying its API identifier and availability — explicit user choice.
+- **Application LLM**: Use exactly `llm = ChatOpenAI(model="gpt-6-luna")` without identifier/authentication preflight — explicit user choice.
+- **Embeddings**: Use exactly `embeddings = OpenAIEmbeddings(check_embedding_ctx_length=False)` without model/provenance configuration gates — explicit user choice.
 - **Storage**: Reuse existing Chroma documents and SQLite booking data; add PostgreSQL and Redis for the graph server — preserve the current assets and requested deployment shape.
 - **Memory**: Preserve retrieved evidence per query in a thread using a custom reducer — later turns must not clear previous retrieval results.
 - **Correctness**: Pending bookings hold slots, and reservation writes must prevent overlaps transactionally — an availability read alone cannot prevent a race.
@@ -135,6 +136,7 @@ Existing capabilities inferred from the codebase map and read-only database insp
 - **Deployment**: Build and deploy the graph server image before the SDK-backed REST integration; use Compose readiness dependencies so Chroma is available before the graph starts.
 - **Maintainability**: Prefer readable, self-explaining code without overloading it — explicit user preference.
 - **Testing**: Supply pytest unit and integration coverage for SQL overlaps, REST endpoints, and RAG accuracy, including the critical state and privacy behavior.
+- **Lean workflow**: Execute inline, disable optional research, verification and code-review subagents, and retain focused executable tests. No live OpenAI preflight checks.
 
 ## Key Decisions
 

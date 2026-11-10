@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="0.988" timestamp="2026-11-10T11:11:22.741115+01:00" hostname="DESKTOP-R6CKJBS"><testcase classname="tests.integration.test_checkpointer_conformance" name="test_official_base_conformance" time="0.027"><failure message="AssertionError: assert False&#10; +  where False = passed_all_base()&#10; +    where passed_all_base = CapabilityReport(checkpointer_name='ParkingSqliteSaver', results={'put': CapabilityResult(detected=True, passed=False,... 'prune': CapabilityResult(detected=False, passed=None, tests_passed=0, tests_failed=0, tests_skipped=1, failures=[])}).passed_all_base">tmp_path = WindowsPath('C:/Users/shmat/AppData/Local/Temp/pytest-of-shmat/pytest-0/test_official_base_conformance0')
+
+    @pytest.mark.asyncio
+    async def test_official_base_conformance(tmp_path):
+        @checkpointer_test(name="ParkingSqliteSaver")
+        async def factory():
+            async with generate_checkpointer(tmp_path / f"{uuid4()}.sqlite3") as saver:
+                yield saver
+    
+        report = await validate(factory)
+        report.print_report()
+&gt;       assert report.passed_all_base()
+E       AssertionError: assert False
+E        +  where False = passed_all_base()
+E        +    where passed_all_base = CapabilityReport(checkpointer_name='ParkingSqliteSaver', results={'put': CapabilityResult(detected=True, passed=False,... 'prune': CapabilityResult(detected=False, passed=None, tests_passed=0, tests_failed=0, tests_skipped=1, failures=[])}).passed_all_base
+
+tests\integration\test_checkpointer_conformance.py:21: AssertionError</failure></testcase></testsuite></testsuites>
