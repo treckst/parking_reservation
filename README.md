@@ -27,6 +27,8 @@ trusted demo off public networks: its internal server has no customer login.
 The graph image pins API version `0.17.1`. The base image pulled during execution
 reported digest `sha256:38a5667c193e1b8540650cfa5c1329632e8f443c9ab2d714cf257b4a0804328d`;
 this records the observed base, not a successful application image build.
+The final application image built and Compose started all services; details are
+recorded in `.planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md`.
 Runtime dependencies are declared in
 `pyproject.toml` with the existing lock. Container addresses are `chromadb:8000`,
 `postgres:5432` and `redis:6379`. Compose waits for their health checks. The

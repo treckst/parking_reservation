@@ -9,6 +9,12 @@ created: "2026-11-10"
 
 # Phase 01 - Validation Strategy
 
+Execution override (2026-11-10): user requested `--yolo --skip-gates --no-verify`.
+New implementation/test artifacts were authored without running pytest, JS,
+browser, provider, conformance or deployed acceptance checks. Prior restored
+baseline had 28 passing tests; that result does not validate the new code.
+Validation flags remain false. See 01-EXECUTION.md for build/start outcomes.
+
 > Execution verification contract synchronized with 01-01 through 01-08 PLAN files. No application checks have run; status remains draft, nyquist_compliant false and wave_0_complete false.
 
 ## Test Infrastructure
