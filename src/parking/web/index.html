@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parking assistant</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.mjs"></script>
+</head>
+<body>
+  <main>
+    <header><div><p class="eyebrow">LOCAL PARKING DEMO</p><h1>Parking assistant</h1></div><button id="new-chat" type="button">New chat</button></header>
+    <p>Ask about parking policies at City Centre, Riverside, Station or Airport.</p>
+    <section id="messages" aria-label="Conversation" aria-live="polite"></section>
+    <p id="error" role="status"></p>
+    <button id="retry" type="button" hidden>Retry</button>
+    <form id="composer">
+      <label for="message">Your question</label>
+      <textarea id="message" name="message" maxlength="4000" rows="3" placeholder="What is the cancellation policy?"></textarea>
+      <button id="send" type="submit" disabled>Send</button>
+    </form>
+    <footer>Policy information only. Booking requests and live availability are coming later.</footer>
+  </main>
+</body>
+</html>
