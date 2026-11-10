@@ -24,4 +24,24 @@ Full suite: 138 passed, 3 opt-in deployed tests skipped. One existing community
 retriever deprecation warning. Existing tests expecting an unexplained spot-ID
 request were updated to verify the new space-choice workflow.
 
-Build and configured-model verification: pending.
+F-03 commit: 9d1cdf8. Three JS controller tests also passed.
+
+## Deployed verification
+
+Rebuilt graph and API images and updated the local Compose stack; all five
+services healthy, volumes preserved. The configured-model replay passed the
+user's exact help/evening/spot-ID conversation and subsequent follow-ups:
+
+- City Centre, November 20, six hours: CTR-001/002/003, 8 PLN/hour and 48 PLN
+  for six hours; exact start requested, no name/plate/unknown-ID demand.
+- Spot-ID question: explained space labels while retaining date/duration/prices.
+- '4pm': normalized to November 20, 16:00-22:00; checked interval availability.
+- 'the first one': selected CTR-001, then asked for missing personal details.
+- 'Airport instead': cleared the City Centre selection, queried AIR prefix on
+  the same date and interval, and offered AIR-001/002/003 at 5 PLN/hour / 30 PLN.
+
+Inspected saved SQL evidence: all lookups had a facility and exact date filter,
+every returned label matched its prefix, and prior query evidence remained
+unchanged. No customer names/plates were used and no hold was created. No graph
+or tracing errors during the live check. All three findings fixed; no remaining
+manual-only findings in this scoped audit.
