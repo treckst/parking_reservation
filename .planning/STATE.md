@@ -4,10 +4,10 @@ current_phase: 01
 current_phase_name: Persistent Grounded Policy Chat
 status: Phase 1 implementation recorded; verification skipped by explicit user request
 stopped_at: Plans 01-02 through 01-08 implemented with acceptance evidence unverified
-last_updated: "2026-11-10T17:14:27.646Z"
+last_updated: "2026-11-10T18:13:20.442Z"
 last_activity: 2026-11-10
-last_activity_desc: Customer LLM inspects and updates drafts through a ToolNode, asks for missing schema fields and submits only complete drafts; 93 offline Python and 3 JS tests pass; deployment not rebuilt.
-state_head: cacf25c14f39144e2692dc6407d46b102306ccb7
+last_activity_desc: Booking draft prompts include outstanding identity fields; admin approval atomically promotes pending requests into confirmed reservations; 171 tests pass, 3 skipped.
+state_head: 5a1fc173f4748d72979cf1460c70fd7c7b99877c
 progress:
   total_phases: 4
   completed_phases: 0
@@ -36,7 +36,7 @@ Phase: 01 (Persistent Grounded Policy Chat) — IMPLEMENTED / UNVERIFIED
 Plan: 8 of 8 implementation summaries recorded; new acceptance checks unverified
 Status: Phase 1 implementation recorded; verification skipped by explicit user request
 Roadmap: APPROVED by the user on 2026-11-10
-Last activity: 2026-11-10 - Completed quick task 261110-op1: Mandatory independent structured field extraction and pending-write validation; 159 Python tests and the exact live screenshot replay passed.
+Last activity: 2026-11-10 - Completed quick task 261110-qec: booking completeness prompts and transactional approval promotion; 171 Python tests passed, 3 skipped.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -121,3 +121,4 @@ Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md
 | 261110-lvz | Customer reservation draft inspect/update/ask/submit ToolNode loop | 2026-11-10 | 2e87950 | complete | [261110-lvz-customer-reservation-agent-tools-for-ins](./quick/261110-lvz-customer-reservation-agent-tools-for-ins/) |
 | 261110-n4c | Reservation-first assistant with conversational help, parking information routing and aligned UI | 2026-11-10 | bed5085 | complete | [261110-n4c-reservation-first-assistance-and-parking](./quick/261110-n4c-reservation-first-assistance-and-parking/) |
 | 261110-op1 | Mandatory structured per-field extraction before SQL, inspection and pending writes | 2026-11-10 | cacf25c | complete | [261110-op1-independent-structured-booking-field-upd](./quick/261110-op1-independent-structured-booking-field-upd/) |
+| 261110-qec | Ensure booking state asks for name, surname, and car number, and transactionally writes confirmed reservations on approval | 2026-11-10 | 5a1fc17 | — | [261110-qec-ensure-booking-state-asks-for-name-surna](./quick/261110-qec-ensure-booking-state-asks-for-name-surna/) |
