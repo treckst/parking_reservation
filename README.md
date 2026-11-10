@@ -1,8 +1,10 @@
 # Parking Reservation Assistant
 
-Local policy chat using LangChain, LangGraph, the Agent Server SDK, FastAPI,
-Chroma, and separate SQLite files. Live availability, booking writes and admin
-actions belong to later phases. The policy graph never opens the booking DB.
+Local policy and reservation chat using LangChain, LangGraph, the Agent Server SDK,
+FastAPI, Chroma, and separate SQLite files. Compiled policy, reservation and admin
+subgraphs preserve conversation state. Reservations hold a slot as pending before
+an API-driven approval interrupt; only approval reaches the mock continuation.
+See [the admin approval API](docs/admin-approval.md) for request/resume details.
 
 ## Setup
 
@@ -13,6 +15,8 @@ accounts or application API keys are used. Credentials never belong in git.
 
 ```powershell
 uv sync --locked
+# If the fixture database is missing, create it once before starting services:
+uv run python ingested_mock_data/seed_database.py
 $env:PYTHONUTF8="1"
 uv run langgraph build -t parking-graph:phase01
 docker compose --env-file .env -f docker/compose.yaml up -d --build --wait

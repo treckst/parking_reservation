@@ -39,7 +39,7 @@ class GraphOutput(StrictModel):
 
 
 class Intent(StrictModel):
-    kind: Literal["policy", "unsupported"]
+    kind: Literal["policy", "reservation", "unsupported"]
     language: Literal["en", "pl"]
     facilities: list[Literal["CTR", "RIV", "STA", "AIR"]]
     retrieval_question: str = Field(min_length=1, max_length=4000)
@@ -120,3 +120,50 @@ class MainState(TypedDict, total=False):
     blocked: bool
     guard_language: str
     rewritten_question: str | None
+    booking_draft: dict
+    reservation_id: str | None
+    reservation_summary: str
+    booking_error: str | None
+    admin_response: dict
+    admin_decision: dict
+
+
+class ReservationDraft(StrictModel):
+    spot_id: str | None = None
+    start: str | None = None
+    end: str | None = None
+    name: str | None = None
+    surname: str | None = None
+    car_number: str | None = None
+
+
+class ReservationSummary(StrictModel):
+    summary: str = Field(min_length=1, max_length=2000)
+
+
+class AdminResponse(StrictModel):
+    reservation_id: str
+    response: str = Field(min_length=1, max_length=2000)
+
+
+class AdminDecision(StrictModel):
+    response: Literal["approve", "reject"]
+
+
+class ReservationOutput(TypedDict):
+    booking_draft: dict
+    reservation_state: dict
+    reservation_id: str | None
+    reservation_summary: str
+    booking_error: str | None
+
+
+class AdminOutput(TypedDict):
+    admin_decision: dict
+
+
+class PolicyOutput(TypedDict):
+    final_reply: str
+    reservation_state: dict
+    messages: Annotated[list[AnyMessage], add_messages]
+    evidence: Annotated[dict, merge_evidence]

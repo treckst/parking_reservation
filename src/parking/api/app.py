@@ -35,12 +35,17 @@ class ChatReply(BaseModel):
     retryable: bool
 
 
+class ReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    response: str = Field(min_length=1, max_length=2000, pattern=r"\S")
+
+
 def create_app(settings=None, client=None):
     settings = settings or Settings.from_env()
     registry = Registry(settings.application_path)
     ledger = Submissions(registry)
     gateway = Gateway(settings, ledger, client=client)
-    app = FastAPI(title="Parking policy chat", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Parking reservation assistant", docs_url=None, redoc_url=None)
     app.state.gateway = gateway
     app.state.registry = registry
     app.add_middleware(
@@ -139,5 +144,13 @@ def create_app(settings=None, client=None):
                 output = GraphOutput.model_validate(json.loads(row["result"]))
                 messages.append({"role": "assistant", "text": output.final_reply, "request_id": row["request_id"]})
         return {"thread_id": thread_id, "messages": messages}
+
+    @app.get("/api/admin/reservations")
+    async def pending_reservations():
+        return {"reservations": gateway.admin.store.pending()}
+
+    @app.post("/api/admin/reservations/{reservation_id}/review", status_code=202)
+    async def review_reservation(reservation_id: Handle, body: ReviewRequest):
+        return await gateway.admin.review(reservation_id, body.response)
 
     return app

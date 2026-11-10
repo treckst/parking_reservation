@@ -34,6 +34,7 @@ class Settings:
         return cls(
             checkpoint_path=Path(checkpoint_path or os.getenv("CHECKPOINT_DB_PATH", ROOT / ".runtime/checkpoints.sqlite3")),
             application_path=Path(os.getenv("APPLICATION_DB_PATH", ROOT / ".runtime/application.sqlite3")),
+            booking_path=Path(os.getenv("BOOKING_DB_PATH", BOOKING_DB)),
             chroma_host=os.getenv("CHROMA_HOST", "127.0.0.1"),
             chroma_port=int(os.getenv("CHROMA_PORT", "8000")),
             graph_url=os.getenv("GRAPH_URL", "http://127.0.0.1:8123"),
