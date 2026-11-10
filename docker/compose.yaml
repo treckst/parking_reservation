@@ -52,7 +52,14 @@ services:
       LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
       # LANGSMITH_API_KEY comes from ../.env via env_file. An empty
       # interpolation here would override that credential during startup.
-      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-parking-reservation}
+      # Agent Server supplies LANGSMITH_AGENT_ID / AGENT_ENVIRONMENT.
+      # Suppress project destinations (including legacy env_file aliases):
+      # the SDK rejects a project and agent address at the same precedence.
+      LANGSMITH_PROJECT: ""
+      LANGCHAIN_PROJECT: ""
+      LANGSMITH_SESSION: ""
+      LANGCHAIN_SESSION: ""
+      HOSTED_LANGSERVE_PROJECT_NAME: ""
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     volumes:
       - ../.runtime/graph:/state

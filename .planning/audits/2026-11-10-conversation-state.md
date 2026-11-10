@@ -19,3 +19,9 @@ interval readiness, and sole ownership of date changes. Full role-labelled
 context is supplied to extraction. 71 unit/booking checks passed, including
 restart/correction/isolation and the reported natural-language interval.
 Provider calls in these automated tests are scripted; live validation is separate.
+
+F-03: Compose clears project destinations and legacy aliases for the graph,
+retaining Agent Server's agent address and runtime credential. Synthetic env_file
+tests exercise the actual installed SDK resolver from root and docker/.
+Full regression gate: 111 passed, 3 skipped (opt-in deployed checks), with one
+existing langchain-community deprecation warning. No fixture/Chroma reseeding.

@@ -70,8 +70,12 @@ embedding-provenance probe runs. Provider/configuration failures are service
 failures; they never cause model substitution or a semantic retrieval retry.
 
 Graph tracing is controlled by Compose environment interpolation:
-`LANGSMITH_TRACING` (defaults to `true`), `LANGSMITH_PROJECT` and
-`LANGSMITH_ENDPOINT`. Export these variables or set them
+`LANGSMITH_TRACING` (defaults to `true`) and `LANGSMITH_ENDPOINT`.
+Agent Server supplies the `parking` agent destination. Compose clears project
+destination variables and their legacy aliases for this service to prevent the
+SDK's `EnvAddressError` when a project and agent address are both set.
+Standalone host scripts may still use `LANGSMITH_PROJECT` in `.env`.
+Export tracing/endpoint variables or set them
 in the root `.env` and use `docker compose --env-file .env ...` as above. Shell
 values take precedence; explicitly setting tracing to `false` disables it.
 Keys stay runtime environment values, never image build arguments or source.
