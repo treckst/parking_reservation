@@ -1,6 +1,8 @@
 """Validated model boundaries and persisted conversation channels."""
 
+from datetime import datetime
 from typing import Annotated, Literal, TypedDict
+from zoneinfo import ZoneInfo
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
@@ -138,11 +140,34 @@ class ReservationDraft(StrictModel):
     surname: str | None = None
     car_number: str | None = None
 
+    @field_validator("start", "end")
+    @classmethod
+    def normalized_timestamp(cls, value):
+        if value is None:
+            return value
+        parsed = datetime.fromisoformat(value)
+        if parsed.utcoffset() is None:
+            raise ValueError("A normalized timestamp requires an offset")
+        local = parsed.astimezone(ZoneInfo("Europe/Warsaw"))
+        if parsed.replace(tzinfo=None) != local.replace(tzinfo=None) or parsed.utcoffset() != local.utcoffset():
+            raise ValueError("Timestamp must use the valid Warsaw local time and offset")
+        return local.isoformat()
+
+
+class ReservationDates(StrictModel):
+    """Separate extraction boundary: null and an absent field have different meanings."""
+
+    start: str | None = None
+    end: str | None = None
+    provided_fields: list[Literal["start", "end"]] = Field(default_factory=list)
+    clarification: str | None = None
+
 
 class ReservationState(MainState, total=False):
     reservation_messages: Annotated[list[AnyMessage], add_messages]
     collection_steps: int
     collection_action: Literal["continue", "ask", "submit"]
+    date_clarification: str | None
 
 
 class ReservationSummary(StrictModel):

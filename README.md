@@ -16,6 +16,20 @@ request to rephrase. Booking identifiers, names, dates and times are allowed in
 English requests and details-only follow-ups. All replies and review summaries
 use English; rejected turns preserve earlier evidence and booking drafts.
 
+The classifier and reservation collector receive the full role-labelled customer
+conversation from the thread checkpoint. Classification also receives the saved
+draft. Collection always executes `inspect_reservation_draft` before its first
+LLM call; inspection is not optional model behavior. Policy evidence and admin
+tool history are separate channels, not customer conversation messages. Policy
+answer generation receives current retrieved evidence rather than the entire chat.
+
+A separate `ReservationDates` structured-output step normalizes natural-language
+dates before collection, using the current Europe/Warsaw time for relative dates
+and the correct seasonal offset. Customers can write "November 13, 2026 from 2pm
+to 9pm". Unspecified fields survive corrections; ambiguous dates require a
+follow-up. Draft tools cannot overwrite normalized dates. Missing spot IDs,
+names or plates also trigger a question; a facility code alone is not a spot ID.
+
 ## Setup
 
 Use the project's Python 3.12 environment, uv, and Docker Compose. Copy the

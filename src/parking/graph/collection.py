@@ -1,6 +1,7 @@
 """Customer-scoped reservation draft tools and a bounded LLM/ToolNode loop."""
 
 import json
+from datetime import datetime
 from typing import Annotated
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -24,6 +25,10 @@ FIELD_LABELS = {
 def draft_snapshot(draft):
     details = ReservationDraft.model_validate(draft).model_dump()
     missing = [field for field, value in details.items() if not value or not value.strip()]
+    if details["start"] and details["end"]:
+        start, end = (datetime.fromisoformat(details[key]) for key in ("start", "end"))
+        if start.date() != end.date() or start >= end:
+            missing.extend(key for key in ("start", "end") if key not in missing)
     return {"draft": details, "missing_fields": missing, "ready": not missing}
 
 
@@ -32,9 +37,9 @@ def missing_details_question(draft):
     return "Please provide your " + ", ".join(FIELD_LABELS[field] for field in missing) + "."
 
 
-def public_details(draft):
+def public_details(draft, facilities=()):
     spot = draft["spot_id"]
-    facility = spot.split("-")[0] if spot else None
+    facility = spot.split("-")[0] if spot else facilities[0] if len(facilities) == 1 else None
     return {"facility": facility if facility in ("CTR", "RIV", "STA", "AIR") else None,
             "spot_id": spot, "start": draft["start"], "end": draft["end"]}
 
@@ -47,13 +52,15 @@ class ReservationCollector:
             draft = ReservationDraft.model_validate(state.get("booking_draft", {})).model_dump()
             if updates is not None:
                 # Omitted fields survive; an explicit null clears a field.
-                draft.update(updates.model_dump(exclude_unset=True))
+                # DateNormalizer is the sole owner of time changes. A tool cannot
+                # overwrite a normalized time or fill an ambiguous date by guessing.
+                draft.update(updates.model_dump(exclude_unset=True, exclude={"start", "end"}))
             snapshot = draft_snapshot(draft)
             if action == "submit" and not snapshot["ready"]:
                 action = "continue"
             error = ("missing_details" if not snapshot["ready"] else "not_submitted")
             return Command(update={
-                "booking_draft": draft, "reservation_state": public_details(draft),
+                "booking_draft": draft, "reservation_state": public_details(draft, state.get("intent", {}).get("facilities", [])),
                 "collection_action": action, "booking_error": None if action == "submit" else error,
                 "reservation_messages": [ToolMessage(
                     content=json.dumps(snapshot), name=name, tool_call_id=tool_call_id)],
@@ -68,7 +75,7 @@ class ReservationCollector:
         def update_reservation_draft(updates: ReservationDraft,
                                      state: Annotated[dict, InjectedState],
                                      tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
-            """Save explicitly supplied customer fields. Omit unchanged fields; null clears a field."""
+            """Save supplied spot/name/plate fields. Dates are already normalized; omit start/end. Null clears a field."""
             return result(state, tool_call_id, "update_reservation_draft", updates=updates)
 
         @tool
@@ -105,7 +112,10 @@ class ReservationCollector:
             "then inspect tool results to decide what is still missing. Preserve prior values unless the "
             "customer corrects or clears them; never invent a name, plate, spot or time. The required "
             "customer fields from the SQLite reservation schema are spot_id, name, surname, car_number, "
-            "start and end (ISO timestamps with explicit timezone offsets, same local date). slot_date "
+            "start and end (already normalized by a separate date extraction step). Do not update "
+            "start/end with tools; ask for natural-language dates when missing, never require ISO "
+            "format or an offset from the customer. A facility code alone is not a spot ID; ask "
+            "for the spot rather than inventing one. slot_date "
             "is derived from start; the application owns ID, creation metadata and pending status. "
             "Call ask_missing_reservation_details when information is missing to ask the customer "
             "and end this turn. When complete, call submit_reservation_draft. This requests a pending "

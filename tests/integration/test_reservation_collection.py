@@ -139,3 +139,53 @@ async def test_collector_receives_all_role_labelled_history():
     assert len(data["conversation"]) == len(history)
     assert data["conversation"][1] == {"role": "ai", "text": "Which spot and plate?"}
     assert data["current_state"]["draft"]["name"] == "Saved"
+
+
+async def test_natural_dates_restart_followup_and_thread_isolation(store, tmp_path):
+    from parking.graph.schemas import Intent, ReservationDates
+
+    query = "AIR, Yevhen Shmatkov, november 13 2026 from 2pm up to 9pm, is it possible?"
+
+    class NaturalBookingModel(BookingModel):
+        def with_structured_output(self, schema, **kwargs):
+            delegate = super().with_structured_output(schema, **kwargs)
+
+            class Structured:
+                async def ainvoke(self, messages):
+                    data = json.loads(messages[-1].content)
+                    if schema is Intent:
+                        return {"kind": "reservation", "language": "en", "facilities": ["AIR"],
+                                "retrieval_question": data["message"]}
+                    if schema is ReservationDates:
+                        if data["message"] == query:
+                            return {"start": "2026-11-13T14:00:00+01:00", "end": "2026-11-13T21:00:00+01:00",
+                                    "provided_fields": ["start", "end"], "clarification": None}
+                        return {"provided_fields": []}
+                    return await delegate.ainvoke(messages)
+            return Structured()
+
+    config = {"configurable": {"thread_id": "natural-dates"}}
+    path = str(tmp_path / "natural.sqlite3")
+    async with AsyncSqliteSaver.from_conn_string(path) as saver:
+        model = NaturalBookingModel(draft={"name": "Yevhen", "surname": "Shmatkov"})
+        graph = build_graph(lambda: model, checkpointer=saver, booking_store=store)
+        result = await graph.ainvoke({"message": query, "request_id": "natural_dates_001"}, config)
+        assert "vehicle plate" in result["final_reply"] and "spot ID" in result["final_reply"]
+        assert "start date" not in result["final_reply"] and "first name" not in result["final_reply"]
+        assert result["reservation_state"]["start"] == "2026-11-13T14:00:00+01:00"
+        assert result["reservation_state"]["facility"] == "AIR"
+        assert not store.pending()
+    async with AsyncSqliteSaver.from_conn_string(path) as saver:
+        model = NaturalBookingModel(draft={"car_number": "ABC123"})
+        graph = build_graph(lambda: model, checkpointer=saver, booking_store=store)
+        result = await graph.ainvoke({"message": "ABC123", "request_id": "natural_dates_002"}, config)
+        assert result["final_reply"] == "Please provide your spot ID."
+        state = (await graph.aget_state(config)).values
+        assert state["booking_draft"]["name"] == "Yevhen"
+        assert state["booking_draft"]["end"] == "2026-11-13T21:00:00+01:00"
+        assert len(state["messages"]) == 4
+        other = await graph.ainvoke({"message": "ABC123", "request_id": "natural_dates_003"},
+                                   {"configurable": {"thread_id": "separate-customer"}})
+        assert other["reservation_state"]["start"] is None
+        assert "first name" in other["final_reply"]
+        assert not store.pending()

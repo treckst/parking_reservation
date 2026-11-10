@@ -12,3 +12,10 @@ Execution: inline (project parallelization disabled; no explicit subagent reques
 
 Customer output remains scoped; evidence reducer and SQLite overlap transactions remain authoritative.
 Unrelated pre-existing worktree changes must be preserved.
+
+F-01: fixed in 5d132be; 58 state/history/booking/unit checks passed.
+F-02: separate ReservationDates normalization, validated Warsaw timestamps,
+interval readiness, and sole ownership of date changes. Full role-labelled
+context is supplied to extraction. 71 unit/booking checks passed, including
+restart/correction/isolation and the reported natural-language interval.
+Provider calls in these automated tests are scripted; live validation is separate.

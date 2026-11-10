@@ -17,7 +17,7 @@ from parking.api.app import create_app
 from parking.api.sessions import Conflict
 from parking.bookings import BookingStore
 from parking.graph.graph import build_graph
-from parking.graph.schemas import AdminDecision, Intent, ReservationDraft, ReservationSummary
+from parking.graph.schemas import AdminDecision, Intent, ReservationDates, ReservationDraft, ReservationSummary
 from parking.settings import Settings
 from tests.unit.test_policy_flow import DOCUMENT, Model
 
@@ -82,6 +82,10 @@ class BookingModel(Model):
                 if schema is ReservationDraft:
                     model.calls["draft"] += 1
                     return model.draft
+                if schema is ReservationDates:
+                    fields = [key for key in ("start", "end") if key in model.draft]
+                    return {"start": model.draft.get("start"), "end": model.draft.get("end"),
+                            "provided_fields": fields, "clarification": None}
                 if schema is ReservationSummary:
                     return {"summary": "Request CTR-001 on November 20, 08:00-10:00."}
                 if schema is AdminDecision:
