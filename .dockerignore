@@ -1,0 +1,10 @@
+.git
+.venv
+.env
+.env.*
+.runtime
+.codex
+.planning
+__pycache__
+.pytest_cache
+ingested_mock_data/*.sqlite3
