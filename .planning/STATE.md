@@ -4,10 +4,10 @@ current_phase: 01
 current_phase_name: Persistent Grounded Policy Chat
 status: Phase 1 implementation recorded; verification skipped by explicit user request
 stopped_at: Plans 01-02 through 01-08 implemented with acceptance evidence unverified
-last_updated: "2026-11-10T11:34:00Z"
+last_updated: "2026-11-10T14:25:25.772Z"
 last_activity: 2026-11-10
-last_activity_desc: Completed hybrid BM25/vector ensemble, environment-based graph tracing and Dockerized API/UI; 13 focused pytest and 3 JS tests pass; all five services healthy.
-state_head: ba7f5e5
+last_activity_desc: Completed modular reservation/admin subgraphs with pending SQLite holds and API resume; 56 offline Python and 3 JS tests pass; deployment not rebuilt.
+state_head: a124b8665803103a579a150ccbf8e0e3fd42dd2e
 progress:
   total_phases: 4
   completed_phases: 0
@@ -36,7 +36,7 @@ Phase: 01 (Persistent Grounded Policy Chat) — IMPLEMENTED / UNVERIFIED
 Plan: 8 of 8 implementation summaries recorded; new acceptance checks unverified
 Status: Phase 1 implementation recorded; verification skipped by explicit user request
 Roadmap: APPROVED by the user on 2026-11-10
-Last activity: 2026-11-10 - Added policy graph, owned remote SDK API, recovery ledger, chat UI, corpus cases and test suites. Verification skipped at user request.
+Last activity: 2026-11-10 - Completed quick task 261110-l6s: modular reservation/admin graphs, pending SQLite holds and API review/resume; 56 offline Python and 3 JS tests passed.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -76,6 +76,12 @@ Full decisions are recorded in PROJECT.md and REQUIREMENTS.md.
 
 None yet.
 
+Quick task 261110-l6s implements the user-requested approval architecture ahead
+of later phase work: compiled reservation/admin subgraphs, intent summary and
+pending SQLite hold before interrupt, structured admin decision and conditional
+mock continuation. Admin surface remains API-only. Source checks pass; container
+images have not been rebuilt and deployed acceptance remains unverified.
+
 ### Blockers/Concerns
 
 - Phase 1 provider prerequisite gate: removed by explicit user instruction. The prior restored baseline had 28 passing offline tests; new code has not been tested. No live authentication or embedding provenance preflight is required.
@@ -99,6 +105,7 @@ Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md
 
 ## Quick Tasks Completed
 
-| ID | Description | Date | Commit | Directory |
-|----|-------------|------|--------|-----------|
-| 261110-h7o | BM25/vector 0.4/0.6 ensemble, environment-based LangSmith tracing, containerized API and UI after graph health | 2026-11-10 | ba7f5e5 | .planning/quick/261110-h7o-hybrid-retrieval-tracing-and-containeriz |
+| # | Description | Date | Commit | Status | Directory |
+| --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261110-h7o | BM25/vector 0.4/0.6 ensemble, environment-based LangSmith tracing, containerized API and UI after graph health | 2026-11-10 | ba7f5e5 | — | .planning/quick/261110-h7o-hybrid-retrieval-tracing-and-containeriz |
+| 261110-l6s | Modular reservation and admin subgraphs, pending SQLite intent and API review/resume | 2026-11-10 | a124b86 | — | [261110-l6s-modular-reservation-and-admin-approval-s](./quick/261110-l6s-modular-reservation-and-admin-approval-s/) |
