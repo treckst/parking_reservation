@@ -4,10 +4,10 @@ current_phase: 01
 current_phase_name: Persistent Grounded Policy Chat
 status: Phase 1 implementation recorded; verification skipped by explicit user request
 stopped_at: Plans 01-02 through 01-08 implemented with acceptance evidence unverified
-last_updated: "2026-11-10T18:51:09Z"
+last_updated: "2026-11-10T19:05:15Z"
 last_activity: 2026-11-10
-last_activity_desc: Automatic admin review and recovery of old interrupted requests; 179 tests pass, 3 skipped; original pending request confirmed live after deployment.
-state_head: 66a1547da4a248e4ea5c52473ecdbfa8a63c4579
+last_activity_desc: Admin API and legacy recovery removed; 171 tests pass, 3 skipped; requested booking rows deleted; UI online, graph startup blocked by LangSmith connectivity.
+state_head: 4a559141cf97aeeb98f3845b61087951a27d995c
 progress:
   total_phases: 4
   completed_phases: 0
@@ -36,7 +36,7 @@ Phase: 01 (Persistent Grounded Policy Chat) — IMPLEMENTED / UNVERIFIED
 Plan: 8 of 8 implementation summaries recorded; new acceptance checks unverified
 Status: Phase 1 implementation recorded; verification skipped by explicit user request
 Roadmap: APPROVED by the user on 2026-11-10
-Last activity: 2026-11-10 - Audit F-01: automatic admin review and legacy interrupt recovery deployed; 179 Python tests passed, 3 skipped; original pending request confirmed live.
+Last activity: 2026-11-10 - Removed obsolete admin API, dispatch storage and recovery tests; 171 tests passed, 3 skipped. Cleared booking_requests and the specified reservation. Images rebuilt; UI online; graph startup blocked by external LangSmith authentication connectivity.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -63,7 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 
 Full decisions are recorded in PROJECT.md and REQUIREMENTS.md.
 
-- [User override / Audit F-01, 2026-11-10]: The admin is an automatic compiled subgraph receiving reservation_id, booking_draft and reservation_summary through shared state keys. It checks the durable handoff, runs structured approve/reject review, finalizes through its transactional ToolNode and returns admin_result to the parent. No human approval is required. Approval inserts a confirmed reservation and marks the request approved; rejection updates the request to rejected. This supersedes the earlier human-review interrupt/API design. Existing old admin interrupts recover automatically on customer polling or the decision-free resume endpoint.
+- [User override / Admin cleanup, 2026-11-10]: The admin is an automatic compiled subgraph receiving reservation_id, booking_draft and reservation_summary through shared state keys. It checks the durable handoff, runs structured approve/reject review, finalizes through its transactional ToolNode and returns admin_result to the parent. Approval inserts a confirmed reservation and marks the request approved; rejection updates the request to rejected. Admin HTTP endpoints, approval/resume adapters, dispatch columns and old-interrupt compatibility are removed. REST routes support the UI and invoke the parent graph. The requested database reset removed all booking_requests and only reservation dda64dc5-b9ce-581d-9aee-1322b4496aad; 720 other reservations remain.
 
 - [Quick 261110-lvz, 2026-11-10]: Customer reservation LLM now binds inspect_reservation_draft, update_reservation_draft, ask_missing_reservation_details and submit_reservation_draft tools. A bounded sequential ToolNode loop provides current scoped draft/missing fields after each update. Collect name, surname, car_number, spot_id and start/end per seed_database.py; derive date and application metadata. Partial updates survive turns/restarts, explicit null clears a field, and incomplete or unsubmitted drafts cannot create a pending row. Collection tool messages remain private.
 
@@ -124,3 +124,4 @@ Resume file: .planning/phases/01-persistent-grounded-policy-chat/01-EXECUTION.md
 | 261110-n4c | Reservation-first assistant with conversational help, parking information routing and aligned UI | 2026-11-10 | bed5085 | complete | [261110-n4c-reservation-first-assistance-and-parking](./quick/261110-n4c-reservation-first-assistance-and-parking/) |
 | 261110-op1 | Mandatory structured per-field extraction before SQL, inspection and pending writes | 2026-11-10 | cacf25c | complete | [261110-op1-independent-structured-booking-field-upd](./quick/261110-op1-independent-structured-booking-field-upd/) |
 | 261110-qec | Ensure booking state asks for name, surname, and car number, and transactionally writes confirmed reservations on approval | 2026-11-10 | 5a1fc17 | — | [261110-qec-ensure-booking-state-asks-for-name-surna](./quick/261110-qec-ensure-booking-state-asks-for-name-surna/) |
+| 9 | Remove obsolete admin API/recovery code and tests; clear booking_requests and the specified confirmed reservation | 2026-11-10 | 4a55914 | — | — |
