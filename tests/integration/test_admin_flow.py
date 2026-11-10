@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
+from langchain_core.messages import AIMessage
 
 from parking.api.app import create_app
 from parking.api.sessions import Conflict
@@ -44,6 +45,29 @@ class BookingModel(Model):
         super().__init__()
         self.response = response
         self.draft = DRAFT if draft is None else draft
+
+    def bind_tools(self, tools, **kwargs):
+        assert kwargs == {"parallel_tool_calls": False}
+        assert {tool.name for tool in tools} == {"inspect_reservation_draft", "update_reservation_draft",
+                                               "ask_missing_reservation_details", "submit_reservation_draft"}
+        model = self
+
+        class Bound:
+            async def ainvoke(self, messages):
+                last = messages[-1]
+                args = {}
+                if last.type == "human":
+                    name = "inspect_reservation_draft"
+                elif last.name == "inspect_reservation_draft":
+                    name, args = "update_reservation_draft", {"updates": model.draft}
+                    model.calls["draft"] += 1
+                else:
+                    name = ("submit_reservation_draft" if json.loads(last.content)["ready"] else
+                            "ask_missing_reservation_details")
+                return AIMessage(content="", tool_calls=[{"name": name, "args": args,
+                    "id": str(uuid4()), "type": "tool_call"}])
+
+        return Bound()
 
     def with_structured_output(self, schema, **kwargs):
         base = super().with_structured_output(schema, **kwargs)
@@ -232,6 +256,9 @@ async def test_summary_runs_after_pending_write_and_receives_no_pii(store):
 
     def factory():
         class CheckedModel:
+            def bind_tools(self, tools, **kwargs):
+                return model.bind_tools(tools, **kwargs)
+
             def with_structured_output(self, schema, **kwargs):
                 delegate = model.with_structured_output(schema, **kwargs)
 

@@ -139,6 +139,12 @@ class ReservationDraft(StrictModel):
     car_number: str | None = None
 
 
+class ReservationState(MainState, total=False):
+    reservation_messages: Annotated[list[AnyMessage], add_messages]
+    collection_steps: int
+    collection_action: Literal["continue", "ask", "submit"]
+
+
 class ReservationSummary(StrictModel):
     summary: str = Field(min_length=1, max_length=2000)
 

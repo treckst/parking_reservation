@@ -6,7 +6,7 @@ The main LangGraph mounts three compiled subgraphs: `policy`, `reservation`, and
 ```text
 prepare → check_language → guard_input → classify
           │                              ├─ policy
-          │                              └─ reservation [extract → persist_pending → summarize]
+          │                              └─ reservation [collect LLM ↔ ToolNode → persist_pending → summarize]
           │                                 → admin [await_review interrupt → structured LLM review → ToolNode]
           │                                 → customer reply based on admin_result
           └─ non-English → English rephrase request → END
@@ -19,13 +19,47 @@ before classification or booking writes. Reservation summaries use English.
 The customer asks to book through `POST /api/chat`. A complete request needs the
 spot ID, same-day start/end ISO timestamps with offsets, name, surname and vehicle
 plate. Missing details produce a follow-up question. The new reservation subgraph
-extracts details over customer turns. Once complete, it validates the interval
+collects details over customer turns using a bound-tool LLM loop. Once complete,
+and after the LLM calls the submission tool, it validates the interval
 against the fixture slot and opening hours and writes a `pending` row in SQLite.
 It then summarizes the saved intent, stores that summary on the same row, and
 passes `reservation_id`, `booking_draft` and `reservation_summary` to the compiled
 admin subgraph. The unique database ID is named `reservation_id` throughout.
 Incomplete or invalid requests never reach summarization or admin review.
 The availability snapshot flag is not used for interval decisions.
+
+The customer LLM can call these tools sequentially through `collection_tools`,
+a real `ToolNode`, and sees each result before choosing the next action:
+
+- `inspect_reservation_draft`: returns only this conversation's current draft,
+  missing required fields and readiness; no reservation-table access.
+- `update_reservation_draft`: merges customer-supplied fields into graph state.
+  Omitted fields survive; explicit null clears a value. Unknown fields such as
+  status, thread ID or admin result are rejected by the input schema.
+- `ask_missing_reservation_details`: ends this turn with a question listing only
+  missing fields. The customer responds through the usual chat endpoint, and the
+  next turn continues with the saved draft.
+- `submit_reservation_draft`: requests submission of a complete saved draft.
+  Missing/blank fields prevent the database write even if the LLM calls this
+  tool prematurely. Transactional slot/hour/overlap validation still follows.
+
+The field contract comes from `ingested_mock_data/seed_database.py`:
+
+| Customer draft | Seed reservation column |
+| --- | --- |
+| `name`, `surname`, `car_number`, `spot_id` | Same names |
+| `start`, `end` | `start_time`, `end_time` |
+| Derived from local start date | `slot_date` |
+| Application-owned metadata | `reservation_id`, `status`, `created_at` |
+
+The application continues using the additive `booking_requests` table; it does
+not import or execute the seed script or change legacy fixture rows. Customers
+are not asked to invent IDs, statuses or creation metadata. The draft remains
+checkpointed across turns/restarts. Internal `reservation_messages` are private
+to the subgraph and do not enter customer history or API output. Tool arguments
+cannot replace the parent state. A six-step budget bounds repeated tool calls.
+Free-form model output cannot trigger submission; user questions are rendered
+from actual missing fields without echoing personal data.
 
 The additive `booking_requests` table shares the existing booking database with
 `transport_slots` and legacy `reservations`. Legacy tables/records are preserved.

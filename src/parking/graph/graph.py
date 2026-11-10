@@ -5,6 +5,7 @@ from langgraph.graph import END, START, StateGraph
 
 from parking.bookings import BookingStore
 from parking.graph.admin import build_admin_graph
+from parking.graph.collection import draft_snapshot, missing_details_question
 from parking.graph.nodes import PolicyNodes
 from parking.graph.policy import build_policy_graph
 from parking.graph.reservation import build_reservation_graph
@@ -34,9 +35,12 @@ def build_graph(model_factory=create_llm, retriever=retrieve, *, checkpointer=No
 
     def booking_reply(state):
         if state.get("booking_error"):
-            text = ("Please provide the spot, date, times with timezone offsets, name, surname and vehicle plate."
-                    if state["booking_error"] == "missing_details" else
-                    "This spot cannot be reserved for that interval. Please check the spot and times.")
+            if draft_snapshot(state.get("booking_draft", {}))["missing_fields"]:
+                text = missing_details_question(state.get("booking_draft", {}))
+            elif state["booking_error"] == "not_submitted":
+                text = "Your details are saved. Would you like me to submit this reservation for approval?"
+            else:
+                text = "This spot cannot be reserved for that interval. Please check the spot and times."
         else:
             result = AdminResult.model_validate(state["admin_result"])
             if result.reservation_id != state["reservation_id"]:
