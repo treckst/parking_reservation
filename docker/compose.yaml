@@ -50,7 +50,8 @@ services:
       APPLICATION_DB_PATH: /state/application.sqlite3
       BOOKING_DB_PATH: /fixtures/parking_november_2026.sqlite3
       LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
-      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      # LANGSMITH_API_KEY comes from ../.env via env_file. An empty
+      # interpolation here would override that credential during startup.
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-parking-reservation}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
     volumes:

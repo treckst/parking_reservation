@@ -56,11 +56,19 @@ embedding-provenance probe runs. Provider/configuration failures are service
 failures; they never cause model substitution or a semantic retrieval retry.
 
 Graph tracing is controlled by Compose environment interpolation:
-`LANGSMITH_TRACING` (defaults to `true`), `LANGSMITH_API_KEY`,
-`LANGSMITH_PROJECT` and `LANGSMITH_ENDPOINT`. Export these variables or set them
+`LANGSMITH_TRACING` (defaults to `true`), `LANGSMITH_PROJECT` and
+`LANGSMITH_ENDPOINT`. Export these variables or set them
 in the root `.env` and use `docker compose --env-file .env ...` as above. Shell
 values take precedence; explicitly setting tracing to `false` disables it.
 Keys stay runtime environment values, never image build arguments or source.
+
+The graph receives `LANGSMITH_API_KEY` directly from the root `.env` through
+the service's `env_file`, including when running `docker compose up -d` from
+`docker/`. Agent Server requires a valid key with LangGraph Cloud access (or an
+applicable `LANGGRAPH_CLOUD_LICENSE_KEY`) even if tracing is disabled. If the
+graph exits with code 3 and logs `License verification failed`, check that
+credential and account access. Do not add an empty `LANGSMITH_API_KEY` entry
+under Compose `environment`: it overrides the credential from `env_file`.
 
 Retrieval combines LangChain BM25 and dense Chroma retrievers using
 `EnsembleRetriever(weights=[0.4, 0.6])`. Reciprocal-rank fusion deduplicates by
